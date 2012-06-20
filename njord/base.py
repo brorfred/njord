@@ -1,13 +1,17 @@
 import numpy as np
 from scipy.spatial import cKDTree
 
+import projmap
 
-class Njord(object):
-    def __init__(self):
-        self.i1 = None
-        self.i2 = None
-        self.j1 = None
-        self.j2 = None
+class Grid(object):
+    """Base class of njord for lat-lon gridded 2D or 3D data """
+    def __init__(self, **kwargs):
+        
+        self.class_name = type(self).__name__
+        self.module_name = self.__module__
+        
+        
+
 
     def add_ij(self):
         self.jmat,self.imat = np.meshgrid(np.arange(self.j2-self.j1),
@@ -106,8 +110,7 @@ class Njord(object):
             self.__dict__[v] = dmpfile[v]
 
     def add_mp(self):
-        import projmaps
-        self.mp = projmaps.Projmap(self.region)
+        self.mp = projmap.Projmap(self.region)
         
 
     def movie(self,fld='temp', k=39,jd1=730120,jd2=730120+365):

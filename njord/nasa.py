@@ -5,13 +5,11 @@ import urllib2
 
 import numpy as np
 import pylab as pl
-import numpy ,pyhdf ,os.path
-from scipy.spatial import KDTree, cKDTree
 
 from pyhdf.SD import SD, SDC
-import njord
+import base
 
-class MODIS(njord.Njord):
+class MODIS(base.Njord):
 
     def __init__(self ,res="9km", ijarea=None,i1=None,i2=None,j1=None,j2=None,
                  latlon=None,lat1=None,lat2=None,lon1=None,lon2=None):
@@ -24,9 +22,9 @@ class MODIS(njord.Njord):
             fi1,fi2,fj1,fj2 = (0000 ,4320, 0, 8640)
             incr = 360.0/8640.0
             self.datadir = "/projData/sat/A4km/"
-        iR    = numpy.arange(fj1, fj2)
-        jR    = numpy.arange(fi1, fi2)
-        [x,y] = numpy.meshgrid(iR,jR)
+        iR    = np.arange(fj1, fj2)
+        jR    = np.arange(fi1, fi2)
+        [x,y] = np.meshgrid(iR,jR)
         self.llat = (  90 - y*incr - incr/2)
         self.llon = (-180 + x*incr + incr/2)
         i1,i2,j1,j2 = (fi1, fi2, fj1, fj2)
@@ -152,7 +150,7 @@ class MODIS(njord.Njord):
         """
         return fld
 
-    def l3read(self ,filename,fld=''):
+    def l3read(self ,filename,fld='',nan="nan"):
         """ Read a L3 mapped file and add field to current instance"""
         filename = self.datadir + '/' + filename
         if not (os.path.isfile(filename) |
@@ -179,13 +177,11 @@ class MODIS(njord.Njord):
             self.__dict__[fld] = Base**((Slope*l3m_data) + Intercept)
         except KeyError:
             self.__dict__[fld] = ((Slope*l3m_data) + Intercept)
-        self.__dict__[fld][self.__dict__[fld] < self.vc[fld][2]] = np.nan
+        if nan=="nan":
+            self.__dict__[fld][self.__dict__[fld] < self.vc[fld][2]] = np.nan
+        else:
+            self.__dict__[fld][self.__dict__[fld] < self.vc[fld][2]] = nan
 
-        tmp = self.__dict__[fld]
-        tmp = tmp[~np.isnan(tmp)]
-        if len(tmp)>0:
-            print  tmp.min(), tmp.max()
-            
         start_iso = (pl.date2num(dtm(
                     sd.attributes()['Period Start Year'],1,1)) + 
                      sd.attributes()['Period Start Day'] - 1)
@@ -193,7 +189,7 @@ class MODIS(njord.Njord):
                     sd.attributes()['Period End Year'],1,1)) + 
                      sd.attributes()['Period End Day'] - 1)
         self.date = pl.num2date((start_iso+end_iso)/2)
-        self.iso  = ((start_iso+end_iso)/2)
+        self.jd   = ((start_iso+end_iso)/2)
 
         if zipped:
             try:
@@ -201,7 +197,8 @@ class MODIS(njord.Njord):
             except:
                 raise IOerror( "Compression of " + filename + " failed.")
 
-    def load(self,fld,fldtype="DAY",yr=2005,yd=300,mn=1,dy=0,jd=0):
+    def load(self,fld,fldtype="DAY",
+             yr=2005, yd=300, mn=1, dy=0, jd=0, nan="nan"):
         """Load a satellite field."""
         if fld in ["fqy",]:
             pass
@@ -239,9 +236,7 @@ class MODIS(njord.Njord):
                                             self.vc[fld][0],
                                             self.res[0],
                                             self.vc[fld][1]))
-        self.l3read(filename,fld)
-
-
+        self.l3read(filename,fld,nan=nan)
 
     def histmoller(self, fieldname, jd1, jd2, y1, y2,
                    mask=[], bins=100, logy=True):

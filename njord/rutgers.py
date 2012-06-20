@@ -5,14 +5,9 @@ import numpy as np
 import pylab as pl
 from scipy.spatial import KDTree, cKDTree
 import matplotlib.cm as cm
-
-import pycdf
+from scipy.io import netcdf_file, netcdf_variable
 
 import base
-import projmaps
-import gmtgrid
-import figpref
-from hitta import GBRY
 
 class NWA(base.Njord):
     """Setup North West Atlantic Grid"""
@@ -24,12 +19,13 @@ class NWA(base.Njord):
         self.j1 = 0
         self.j2 = 361
         self.datadir = datadir
-        g = pycdf.CDF(datadir + '/NWA_grd.nc')
-        self.llat = g.var('lat_rho')[:]
-        self.llon = g.var('lon_rho')[:]-360
-        self.depth = g.var('h')[:]
-        self.Cs_r = g.var('Cs_r')[:]
-        self.region = "nwa_small"
+ 
+        g = netcdf_file(datadir + '/NWA_grd.nc', 'r')
+        self.llat = g.variables['lat_rho'][:]
+        self.llon = g.variables['lon_rho'][:]-360
+        self.depth = g.variables['h'][:]
+        self.Cs_r = g.variables['Cs_r'][:]
+
         self.add_mp()
 
     def load(self,fldname,jd=730217,yr=0,mn=1,dy=1,hr=3):
@@ -62,25 +58,32 @@ class NWA(base.Njord):
         self.utmx = g.var('x_rho')[:]
         self.utmy = g.var('y_rho')[:]
 
-class Coral(base.Njord):
-    """Setup INdonesial flowthrough Grid"""
-    def __init__(self, datadir="/projData/rutgers/CORAL/",ijarea=[],
-                 lat1=None,lat2=None,lon1=None,lon2=None):
-        super(Coral, self).__init__()
+class Coral(base.Grid):
+    """Setup Indonesial flowthrough instance"""
+    def __init__(self, **kwargs):
+        #,ijarea=[], lat1=None,lat2=None,lon1=None,lon2=None):
+        #module_name = __module__
+        #class_name  = __class__
+        #print module_name
+        #return
+        super(Coral, self).__init__(kwargs)
+        return
+
         self.i1 = 0
         self.i2 = 1281
         self.j1 = 0
         self.j2 = 641
         self.datadir = datadir
-        g = pycdf.CDF(datadir + '/coral_grd.nc')
-        self.llat = g.var('lat_rho')[:]
-        self.llon = g.var('lon_rho')[:]
-        self.depth = g.var('h')[:]
-        self.Cs_r = g.var('Cs_r')[:]
-        self.region = "indthr"
+
+        g = netcdf_file("%s/%s" % (self.datadir, self.gridfile), 'r')
+        self.llat = g.variables['lat_rho'][:]
+        self.llon = g.variables['lon_rho'][:]-360
+        self.depth = g.variables['h'][:]
+        self.Cs_r = g.variables['Cs_r'][:]
+
         self.add_mp()
 
-    def load(self,fldname,jd=730217,yr=0,mn=1,dy=1,hr=3):
+    def load(self,fldname,jd=731583,yr=0,mn=1,dy=1,hr=3):
         """ Load velocity fields for a given day"""
         if fldname == "uv":
             self.load('u',jd=jd, yr=yr, mn=mn, dy=dy, hr=hr)
@@ -91,9 +94,8 @@ class Coral(base.Njord):
         i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
         if yr!=0:
             jd = pl.date2num(dtm(yr,mn,dy,hr))
-        filename = "/nwa_avg_%05i.nc" % (jd - 714782)
-        nc = pycdf.CDF("%s/%s/%s" % (self.datadir, pl.num2date(jd).year,
-                                     filename))     
+        filename = "/coral_avg_%05i.nc" % (jd - 731365)
+        nc = pycdf.CDF("%s/%s" % (self.datadir, filename))     
         fld =  np.squeeze(nc.var(fldname)[:])
         fld[fld>9999] = np.nan
         self.__dict__[fldname] = fld
