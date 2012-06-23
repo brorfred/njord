@@ -9,24 +9,24 @@ from scipy.io import netcdf_file, netcdf_variable
 
 import base
 
-class NWA(base.Njord):
+class NWA(base.Grid):
     """Setup North West Atlantic Grid"""
-    def __init__(self, datadir="/Volumes/keronHD4/rutgersNWA/",ijarea=[],
-                 lat1=None,lat2=None,lon1=None,lon2=None):
+    def __init__(self, **kwargs):
         super(NWA, self).__init__()
-        self.i1 = 0
-        self.i2 = 721
-        self.j1 = 0
-        self.j2 = 361
-        self.datadir = datadir
  
-        g = netcdf_file(datadir + '/NWA_grd.nc', 'r')
+  
+        self.set_ij_pos()
+        self.add_mp()
+
+    def setup_grid(self):
+        """Setup necessary variables for grid """
+        g = netcdf_file(self.gridfile, 'r')
         self.llat = g.variables['lat_rho'][:]
         self.llon = g.variables['lon_rho'][:]-360
         self.depth = g.variables['h'][:]
         self.Cs_r = g.variables['Cs_r'][:]
 
-        self.add_mp()
+
 
     def load(self,fldname,jd=730217,yr=0,mn=1,dy=1,hr=3):
         """ Load velocity fields for a given day"""
@@ -50,11 +50,11 @@ class NWA(base.Njord):
                      self.Cs_r[:,np.newaxis,np.newaxis])
 
     def add_landmask(self):
-        g = pycdf.CDF(self.datadir + '/NWA_grd.nc')
+        g = pycdf.CDF(self.gridfile)
         self.landmask = g.var('mask_rho')[:]
 
     def add_utmxy(self):
-        g = pycdf.CDF(self.datadir + '/NWA_grd.nc')
+        g = pycdf.CDF(self.gridfile)
         self.utmx = g.var('x_rho')[:]
         self.utmy = g.var('y_rho')[:]
 
@@ -62,26 +62,16 @@ class Coral(base.Grid):
     """Setup Indonesial flowthrough instance"""
     def __init__(self, **kwargs):
         #,ijarea=[], lat1=None,lat2=None,lon1=None,lon2=None):
-        #module_name = __module__
-        #class_name  = __class__
-        #print module_name
-        #return
-        super(Coral, self).__init__(kwargs)
-        return
+        super(Coral, self).__init__(**kwargs)
+        self.add_mp()
 
-        self.i1 = 0
-        self.i2 = 1281
-        self.j1 = 0
-        self.j2 = 641
-        self.datadir = datadir
-
-        g = netcdf_file("%s/%s" % (self.datadir, self.gridfile), 'r')
+    def setup_grid(self):
+        """Setup necessary variables for grid """
+        g = netcdf_file(self.gridfile, 'r')
         self.llat = g.variables['lat_rho'][:]
         self.llon = g.variables['lon_rho'][:]-360
         self.depth = g.variables['h'][:]
-        self.Cs_r = g.variables['Cs_r'][:]
-
-        self.add_mp()
+        self.Cs_r = g.variables['Cs_r'][:]   
 
     def load(self,fldname,jd=731583,yr=0,mn=1,dy=1,hr=3):
         """ Load velocity fields for a given day"""
@@ -104,7 +94,7 @@ class Coral(base.Grid):
                      self.Cs_r[:,np.newaxis,np.newaxis])
 
     def add_landmask(self):
-        g = pycdf.CDF(self.datadir + '/coral_grd.nc')
+        g = pycdf.CDF(self.gridfiile)
         self.landmask = g.var('mask_rho')[:]
 
     def add_utmxy(self):

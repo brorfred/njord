@@ -2,89 +2,60 @@ import os, os.path
 from datetime import datetime as dtm
 import urllib
 import urllib2
+import re
 
 import numpy as np
 import pylab as pl
 
 from pyhdf.SD import SD, SDC
 import base
+import yrday
 
-class MODIS(base.Njord):
+class MODIS(base.Grid):
 
-    def __init__(self ,res="9km", ijarea=None,i1=None,i2=None,j1=None,j2=None,
-                 latlon=None,lat1=None,lat2=None,lon1=None,lon2=None):
+    def __init__(self, res="9km", **kwargs):
+        self.res = res
+        super(MODIS, self).__init__(**kwargs)
+        self.lat = self.llat[:,0]
+        self.lon = self.llon[0,:]
+        self.add_vc()
 
-        if res == "9km":
-            fi1,fi2,fj1,fj2 = (0000 ,2160, 0, 4320)
-            incr = 360.0/4320.0
-            self.datadir = "/projData/sat/A9km/"
-        elif res == "4km":
-            fi1,fi2,fj1,fj2 = (0000 ,4320, 0, 8640)
-            incr = 360.0/8640.0
-            self.datadir = "/projData/sat/A4km/"
-        iR    = np.arange(fj1, fj2)
-        jR    = np.arange(fi1, fi2)
+    def setup_grid(self):
+        if self.res is "9km":
+            self.i1,self.i2,self.j1,self.j2 = (0000 ,2160, 0, 4320)
+        elif self.res is "4km":
+            self.i1,self.i2,self.j1,self.j2 = (0000 ,4320, 0, 8640)
+        incr  = 360.0/self.j2
+        iR    = np.arange(self.j1, self.j2)
+        jR    = np.arange(self.i1, self.i2)
         [x,y] = np.meshgrid(iR,jR)
         self.llat = (  90 - y*incr - incr/2)
         self.llon = (-180 + x*incr + incr/2)
-        i1,i2,j1,j2 = (fi1, fi2, fj1, fj2)
-     
-        if ijarea is not None:
-            i1,i2,j1,j2 = ijarea
-        elif latlon is not None:
-            i1,i2,j1,j2 = self.llrect2ij(*latlon)   
-        if lat1 is not None:
-            i2 = int(np.nonzero(self.llat[:,0] < lat1)[0].min())
-        if lat2 is not None:
-            i1 = int(np.nonzero(self.llat[:,0] > lat2)[0].max())
-        if lon1 is not None:
-            j2 = int(np.nonzero(self.llon[0,:] > lon2)[0].min())
-        if lon2 is not None:
-            j1 = int(np.nonzero(self.llon[0,:] < lon1)[0].max())
-        self.i1,self.i2,self.j1,self.j2 = i1,i2,j1,j2
-
-        self.llat = (  90 - y*incr - incr/2)[i1:i2,j1:j2]
-        self.llon = (-180 + x*incr + incr/2)[i1:i2,j1:j2]
-        self.lat = self.llat[:,0]
-        self.lon = self.llon[0,:]
-        self.res = res
-        self.add_vc()
-
+        self.imt = self.i2
+        self.jmt = self.j2
+        
     def add_landmask(self):
         """Add a landmask field to the current instance"""
-        if self.res == "4km":
-            file = 'A20021852011273.L3m_CU_PAR_par_4km'
-            h = SD(self.datadir + file, SDC.READ)
-            fld = h.select('l3m_data')[self.i1:self.i2, self.j1:self.j2]
-            fld[fld!=-32767.] = 0
-            fld[fld==-32767.] = 1
-            self.landmask = fld.astype(np.int8)
-        elif self.res == "9km":
-            file = 'A20021852011031.L3m_CU_CHL_chlor_a_9km'
-            h = SD(self.datadir + file, SDC.READ)
-            fld = h.select('l3m_data')[self.i1:self.i2, self.j1:self.j2]
-            fld[fld!=-32767.] = 0
-            fld[fld==-32767.] = 1
-            self.landmask = fld.astype(np.int8)
-        else:
-            print "Unknown Resolution"
-            raise
-
+        if hasattr(self,'landmask'):
+            return
+        self.load('par','CU')
+        self.par = self.par * 0
+        self.par[np.isnan(self.par)] = 1
+        self.landmask = self.par.copy().astype(np.int8)
+        del(self.par)
+        
     def add_mnclim(self):
         """Add a list with file name dates for Monthly climatologies"""
-        self.mnclim = [
-            "A20030012010031",
-            "A20030322010059",
-            "A20030602010090",
-            "A20030912010120",
-            "A20031212010151",
-            "A20031522010181",
-            "A20021822010212",
-            "A20022132010243",
-            "A20022442010273",
-            "A20022742010304",
-            "A20023052009334",
-            "A20023352009365"]
+        url = "http://%s/%s" % (self.gsfc_host, self.a_mc_url_9km)
+        datelist = []
+        for line in urllib.urlopen(url):
+            if "cgi/getfile" in line:
+                datelist.append(re.findall(r'getfile/A([^E]+).L3m',
+                                           line)[0][:14])
+        self.mc_datedict = {}
+        for dstr in datelist[1:]:
+            mn,_ = yrday.mndy(int(dstr[:4]),int(dstr[4:7]))
+            self.mc_datedict[mn] = dstr
         
     def add_vc(self):
         """Add a dict with filename variable components"""
@@ -219,7 +190,7 @@ class MODIS(base.Njord):
                  pl.date2num(dtm(yr,  1,  1))) + 1    
         if fldtype == "MC":
             self.add_mnclim()
-            filename = self.mnclim[mn-1]
+            datestr = self.mc_datedict[mn]
         elif fldtype == "DAY":
             datestr = "%i%03i" % (yr, yd)
         elif fldtype == "8D":
@@ -229,7 +200,7 @@ class MODIS(base.Njord):
             pos = np.nonzero(yd >= yd1)[0].max()
             datestr = "%i%03i%i%03i" % (yr, yd1[pos], yr, yd2[pos])
         elif fldtype == "CU":
-            datestr = "A20021852011059"
+            datestr = "20021852011365"
         else:
             print "Field type not included"
         filename = ("A%s.L3m_%s_%s_%s%s" % (datestr, fldtype,
@@ -260,7 +231,6 @@ class MODIS(base.Njord):
         hiS.hist = hsmat
         hiS.norm = (hsmat.astype(float) / hsmat.max(axis=0))
         self.__dict__[fieldname + "_hiS"] = hiS
-
 
 
 

@@ -1,3 +1,7 @@
+import os
+import ConfigParser
+import json
+
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -6,12 +10,65 @@ import projmap
 class Grid(object):
     """Base class of njord for lat-lon gridded 2D or 3D data """
     def __init__(self, **kwargs):
-        
-        self.class_name = type(self).__name__
-        self.module_name = self.__module__
-        
-        
+        """Initalize an instance based on a config file"""
+        self.projname = "%s.%s" % (self.__module__, type(self).__name__)
+        self.basedir =  os.path.dirname(os.path.abspath(__file__))
+        self.inkwargs = kwargs
+        self._load_presets('njord',kwargs)
+        for key,val in kwargs.items():
+            self.__dict__[key] = val
+        self.setup_grid()
+        self._set_maxmin_ij()
 
+    def _load_presets(self, filepref, kwargs):
+        """Read and parse the config file"""
+        cfg = ConfigParser.ConfigParser()
+        files = ["%s/%s.cfg" % (os.curdir, filepref),
+                 "%s/.%s.cfg" % (os.path.expanduser("~"), filepref),
+                 "%s/%s.cfg" % (self.basedir, filepref)]
+        for fnm in files:
+            cfg.read(fnm)
+            if self.projname in cfg.sections():
+                self.config_file = fnm
+                break
+        else:
+            raise NameError('Project not included in config files')
+
+        def splitkey(key, val):
+            if key in self.inkwargs.keys():
+                self.__dict__[key] = self.inkwargs[key]
+                del self.inkwargs[key]
+            else:
+                self.__dict__[key] = val
+            
+        for key,val in cfg.items(self.projname):
+            try:
+                splitkey(key, json.loads(val))
+            except ValueError:
+                splitkey(key, val)
+
+
+    def _set_maxmin_ij(self):
+        """Set a potential sub region of the grid if defined """
+        if 'ijarea' in self.inkwargs.keys():
+            self.i1,self.i2,self.j1,self.j2 = self.inkwargs['ijarea']    
+        for att,val in zip(['i1', 'i2', 'j1', 'j2'], [0,self.imt,0,self.jmt]): 
+            if not hasattr(self,att):
+                self.__dict__[att] = val
+
+        if 'latlon' in self.inkwargs.keys():
+            self.lon1,self.lon2,self.lat1,self.lat2 = self.inkwargs['latlon']
+        if hasattr(self,'lat1'):
+            self.j1 = np.nonzero(self.llat<self.lat1)[0].max() - 1
+        if hasattr(self,'lat2'):
+            self.j2 = np.nonzero(self.llat>self.lat2)[0].min() + 1
+        if hasattr(self,'lon1'):
+            self.i1 = np.nonzero(self.llon<self.lon1)[1].max() - 1 
+        if hasattr(self,'lon2'):
+            self.i2 = np.nonzero(self.llon>self.lon2)[1].min() + 1
+
+        self.llat = self.llat[self.j1:self.j2, self.i1:self.i2]
+        self.llon = self.llon[self.j1:self.j2, self.i1:self.i2]
 
     def add_ij(self):
         self.jmat,self.imat = np.meshgrid(np.arange(self.j2-self.j1),
@@ -89,15 +146,8 @@ class Grid(object):
         self.__dict__[fieldname + 't'] = field
         self.tvec = np.arange(jd1, jd2+1)
 
-    def llrect2ij(self,lon1,lon2,lat1,lat2):
-        i1 = np.nonzero(self.llat[:,0]>lat2)[0].max()
-        i2 = np.nonzero(self.llat[:,0]<lat1)[0].min()
-        j1 = np.nonzero(self.llon[0,:]<lon1)[0].max()
-        j2 = np.nonzero(self.llon[0,:]>lon2)[0].min()
-        return int(i1),int(i2),int(j1),int(j2)
-
     def dump(self, filename=None):
-        """Dump all atrributes in instance to a file"""
+        """Dump all attributes in instance to a file"""
         dmp_dct = {}
         for v in self.__dict__.keys():
             dmp_dct[v] = self.__dict__[v]
@@ -110,7 +160,7 @@ class Grid(object):
             self.__dict__[v] = dmpfile[v]
 
     def add_mp(self):
-        self.mp = projmap.Projmap(self.region)
+        self.mp = projmap.Projmap(self.map_region)
         
 
     def movie(self,fld='temp', k=39,jd1=730120,jd2=730120+365):
