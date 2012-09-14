@@ -11,7 +11,8 @@ class Grid(object):
     """Base class of njord for lat-lon gridded 2D or 3D data """
     def __init__(self, **kwargs):
         """Initalize an instance based on a config file"""
-        self.projname = "%s.%s" % (self.__module__, type(self).__name__)
+        self.projname = "%s.%s" % (self.__module__.split(".")[-1],
+                                   type(self).__name__)
         self.basedir =  os.path.dirname(os.path.abspath(__file__))
         self.inkwargs = kwargs
         self._load_presets('njord',kwargs)
@@ -136,15 +137,38 @@ class Grid(object):
 
 
     def timeseries(self, fieldname, jd1, jd2, mask=[]):
+        """Create a timeseries of fields using mask to select data"""
         if len(mask)==0: mask = (self.lat !=-800)
-        field = np.zeros( (jd2-jd1+1,self.i2-self.i1, self.j2-self.j1),
-                          dtype=np.float32)
+        field = self.llat * 0 
         for n,jd in enumerate(np.arange(jd1,jd2+1)):
             self.load(fieldname, jd=jd)
             field[n,:,:] = self.__dict__[fieldname]
             field[n,~mask] = np.nan
         self.__dict__[fieldname + 't'] = field
         self.tvec = np.arange(jd1, jd2+1)
+
+    def histmoller(self, fieldname, jd1, jd2, y1, y2,
+                   mask=[], bins=100, logy=True):
+        """Create a histmoller diagram (histogram on y and time on x)"""
+        if len(mask)==0: mask = (self.llat !=-800)
+        if logy:
+            vlist = np.exp(np.linspace(np.log(y1), np.log(y2), bins+1))
+        else:
+            vlist = np.linspace(y1, y2, bins+1)
+        hsmat = np.zeros((jd2-jd1+1,bins), dtype=np.int)
+        tvec = np.arange(jd1,jd2+1)
+        for n_t,jd in enumerate(tvec):
+            print pl.num2date(jd)
+            self.load(fieldname, jd=jd)
+            field = self.__dict__[fieldname]
+            field[~mask] = np.nan
+            hsmat[n_t,:],_ = np.histogram(field[~np.isnan(field)], vlist)
+        class hiS: pass
+        hiS.tvec = tvec
+        hiS.vlist = vlist
+        hiS.hist = hsmat
+        hiS.norm = (hsmat.astype(float) / hsmat.max(axis=0))
+        self.__dict__[fieldname + "_hiS"] = hiS
 
     def dump(self, filename=None):
         """Dump all attributes in instance to a file"""

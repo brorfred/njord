@@ -2,27 +2,22 @@ from datetime import datetime as dtm
 
 import numpy as np
 import pylab as pl
-from scipy.spatial import KDTree, cKDTree
 import matplotlib.cm as cm
-
 
 import pycdf
 
-import projmaps
+import projmap
 import gmtgrid
 import figpref
 from hitta import GBRY
 
-class Oscar:
 
-    def __init__(self, datadir="/projData/OSCAR/thrdDeg",ijarea=[],
-                 lat1=None,lat2=None,lon1=None,lon2=None):
-        self.i1 = 0
-        self.i2 = 481
-        self.j1 = 0
-        self.j2 = 1081
-        self.datadir = datadir
-        gc = pycdf.CDF(self.datadir + '/oscar_vel1992.nc')
+class Oscar(base.Grid):
+    def __init__(self, **kwargs):
+        super(MODIS, self).__init__(**kwargs)
+
+    def setup_grid(self):
+        gc = pycdf.CDF(self.gridfile)
         self.lat = gc.var('latitude')[self.i1:self.i2]
         lon = gc.var('longitude')[self.j1:self.j2]
         lon[lon>360]=lon[lon>360]-360
@@ -63,74 +58,10 @@ class Oscar:
         self.u = u2*rat + u1*(1-rat)
         self.v = v2*rat + v1*(1-rat)
         print jd,md,t1,t2
+
     def init_nasa(self):
-        import pysea.NASA
-        self.ns = pysea.NASA.nasa(res='9km')#,ijarea=(700,1700,2000,4000))
-
-    def add_ij(self):
-        i1=self.i1; i2=self.i2;j1=self.j1; j2=self.j2
-        self.jmat,self.imat = np.meshgrid(np.arange(self.j2-self.j1),
-                                          np.arange(self.i2-self.i1))
-        self.ijvec = np.vstack((np.ravel(self.imat),np.ravel(self.jmat))).T
-    def add_kd(self):
-        self.kd = cKDTree(list(np.vstack((np.ravel(self.llon),
-                                          np.ravel(self.llat))).T))
-    def ll2ij(self,lon,lat,nei=1):
-        if not hasattr(self,'kd'):
-            self.add_kd()
-            self.add_ij()
-        dist,ij = self.kd.query(list(np.vstack((lon,lat)).T),nei)
-        return self.ijvec[ij-1][:,0],self.ijvec[ij-1][:,1]
-
-    def create_ijvecs(self):
-        """ Create ij vectors to match oscar fields with L3 fields"""
-        if not hasattr(self,'ns'):
-            self.init_nasa()
-        ns = self.ns
-        kd = cKDTree(list(np.vstack((np.ravel(ns.lon),np.ravel(ns.lat))).T))
-        dist,ij = kd.query(list(np.vstack((np.ravel(self.llon),
-                                           np.ravel(self.llat))).T))
-        l3j,l3i = np.meshgrid(np.arange(ns.j2-ns.j1),
-                              np.arange(ns.i2-ns.i1))
-        l3ij = np.vstack((np.ravel(l3i),np.ravel(l3j))).T
-        gomj,gomi = np.meshgrid(np.arange(j2-j1),np.arange(i2-i1))
-        #gomij = np.array(zip(np.ravel(gomi),np.ravel(gomj)))
-        gomij = np.vstack((np.ravel(gomi),np.ravel(gomj))).T
-        def gla(kk):
-            mat = self.imat*0
-            mat[self.ijvec[:,0],self.ijvec[:,1]] = l3ij[ij,:][:,kk]
-            #for i,j in gomij:
-            #    mat[i,j] = l3ij[ij,:][n,kk]
-            #    n+=1
-            return mat
-        self.si = gla(1)
-        self.satj = np.ravel(gla(0))
-        self.sati = np.ravel(gla(1))
-        
-    def create_satijvecs(self):
-        """ Create ij vectors to match oscar fields with L3 fields"""
-        i1=self.i1; i2=self.i2;j1=self.j1; j2=self.j2
-        if not hasattr(self,'ns'):
-            self.init_nasa()
-        ns = self.ns
-        kd = cKDTree(list(np.vstack((np.ravel(self.llon),
-                                     np.ravel(self.llat))).T))
-        dist,ij = kd.query(list(np.vstack((np.ravel(ns.lon),
-                                           np.ravel(ns.lat))).T))
-        gomj,gomi = np.meshgrid(np.arange(ns.j2-ns.j1),
-                                np.arange(ns.i2-ns.i1))
-        l3j,l3i = np.meshgrid(np.arange(j2-j1),np.arange(i2-i1))
-        l3ij  = np.vstack((np.ravel(l3i),np.ravel(l3j))).T
-        gomij = np.vstack((np.ravel(gomi),np.ravel(gomj))).T
-        def gla(kk):
-            mat = gomj[:]*0
-            mat[gomij[:,0],gomij[:,1]] = l3ij[ij,:][:,kk]
-            return mat
-        self.gcmj = np.ravel(gomi)
-        self.gcmi = np.ravel(gomj)
-        self.si = gla(1)
-        self.satj = np.ravel(gla(0))
-        self.sati = np.ravel(gla(1))
+        import nasa
+        self.ns = nasa.MODIS(res='9km')
 
     def loadL3(self,jd=732281.0, mc=0, fld='chl'):
         if not hasattr(self,'gcmi'):
@@ -153,13 +84,13 @@ class Oscar:
 
     def add_landmask(self):
         from scipy.stats import nanmean
-        nc = pycdf.CDF(self.datadir + '/oscar_vel2005.nc')
+        nc = pycdf.CDF(self.gridfile)
         u = nc.var('u')[:,:,:,:1081]
         msk = np.squeeze(nanmean(u,axis=0))
         msk = msk*0
         msk[np.isnan(msk)]=1
         self.landmask = gmtgrid.convert(msk,self.gr)
-
+        
     def dchl_dt_time(self):
         i1 = 0
         i2 = 230

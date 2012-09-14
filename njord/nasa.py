@@ -22,12 +22,12 @@ class MODIS(base.Grid):
 
     def setup_grid(self):
         if self.res is "9km":
-            self.i1,self.i2,self.j1,self.j2 = (0000 ,2160, 0, 4320)
+            self.i1,self.i2,self.j1,self.j2 = (0000 ,4320, 0, 2160)
         elif self.res is "4km":
-            self.i1,self.i2,self.j1,self.j2 = (0000 ,4320, 0, 8640)
-        incr  = 360.0/self.j2
-        iR    = np.arange(self.j1, self.j2)
-        jR    = np.arange(self.i1, self.i2)
+            self.i1,self.i2,self.j1,self.j2 = (0000 ,8640, 0, 4320)
+        incr  = 360.0/self.i2
+        jR    = np.arange(self.j1, self.j2)
+        iR    = np.arange(self.i1, self.i2)
         [x,y] = np.meshgrid(iR,jR)
         self.llat = (  90 - y*incr - incr/2)
         self.llon = (-180 + x*incr + incr/2)
@@ -140,7 +140,7 @@ class MODIS(base.Grid):
 
         sd = SD(filename, SDC.READ)
         l3m_data  = np.ma.masked_values(
-            sd.select('l3m_data')[self.i1:self.i2, self.j1:self.j2],65535)
+            sd.select('l3m_data')[self.j1:self.j2, self.i1:self.i2],65535)
         Intercept = sd.attributes()['Intercept']
         Slope     = sd.attributes()['Slope']
         try:    
