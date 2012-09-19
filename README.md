@@ -28,7 +28,8 @@ Define a project in one of the following files:
 
 Example:
 
-[DEFAULT]
+```ini
+[Default]
 basedir:     /projData
 
 [rutgers.Coral]
@@ -37,7 +38,7 @@ gridfile:    %(datadir)s/coral_grd.nc
 map_region:  indthr
 imt:         1281
 jmt:         641
-
+```
 
 Usage
 -----
