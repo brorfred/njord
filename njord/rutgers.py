@@ -3,20 +3,26 @@ import math
 
 import numpy as np
 import pylab as pl
-from scipy.spatial import KDTree, cKDTree
-import matplotlib.cm as cm
 from scipy.io import netcdf_file, netcdf_variable
 
 import base
 
-class NWA(base.Grid):
-    """Setup North West Atlantic Grid"""
+class Rutgers(base.Grid):
+    """ Baseclass for all rutgers projects """
     def __init__(self, **kwargs):
-        super(NWA, self).__init__()
- 
-  
-        self.set_ij_pos()
+        super(Rutgers, self).__init__()
         self.add_mp()
+
+    def add_landmask(self):
+        """ Add a landmask attribute """
+        g = netcdf_file(self.gridfile)
+        self.landmask = g.variables['mask_rho'][:]
+
+    def add_utmxy(self):
+        """Add catersian coordinates """
+        g = netcdf_file(self.gridfile)
+        self.utmx = g.variables['x_rho'][:]
+        self.utmy = g.variables['y_rho'][:]
 
     def setup_grid(self):
         """Setup necessary variables for grid """
@@ -26,9 +32,7 @@ class NWA(base.Grid):
         self.depth = g.variables['h'][:]
         self.Cs_r = g.variables['Cs_r'][:]
 
-
-
-    def load(self,fldname,jd=730217,yr=0,mn=1,dy=1,hr=3):
+    def load(self,fldname,jd=None,yr=0,mn=1,dy=1,hr=3):
         """ Load velocity fields for a given day"""
         if fldname == "uv":
             self.load('u',jd=jd, yr=yr, mn=mn, dy=dy, hr=hr)
@@ -39,67 +43,30 @@ class NWA(base.Grid):
         i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
         if yr!=0:
             jd = pl.date2num(dtm(yr,mn,dy,hr))
-        filename = "/nwa_avg_%05i.nc" % (jd - 714782)
-        nc = pycdf.CDF("%s/%s/%s" % (self.datadir, pl.num2date(jd).year,
-                                     filename))     
-        fld =  np.squeeze(nc.var(fldname)[:])
+        nc = netcdf_file(self.jd2filename(jd))
+        fld =  np.squeeze(nc.variables[fldname][:]).copy()
         fld[fld>9999] = np.nan
         self.__dict__[fldname] = fld
-        self.ssh =  np.squeeze(nc.var('zeta')[:])
+        self.ssh =  np.squeeze(nc.variables['zeta'][:])
         self.zlev = ((self.depth + self.ssh)[np.newaxis,:,:] *
                      self.Cs_r[:,np.newaxis,np.newaxis])
 
-    def add_landmask(self):
-        g = pycdf.CDF(self.gridfile)
-        self.landmask = g.var('mask_rho')[:]
-
-    def add_utmxy(self):
-        g = pycdf.CDF(self.gridfile)
-        self.utmx = g.var('x_rho')[:]
-        self.utmy = g.var('y_rho')[:]
-
-class Coral(base.Grid):
-    """Setup Indonesial flowthrough instance"""
+class NWA(Rutgers):
+    """Setup North West Atlantic"""
     def __init__(self, **kwargs):
-        #,ijarea=[], lat1=None,lat2=None,lon1=None,lon2=None):
+        super(NWA, self).__init__()
+
+    def jd2filename(self,jd):
+        if jd == None: jd = 730217 
+        filename = "/nwa_avg_%05i.nc" % (jd - 714782)
+        return "%s/%s/%s" % (self.datadir, pl.num2date(jd).year, filename)    
+   
+class Coral(Rutgers):
+    """Setup Indonesial flowthrough"""
+    def __init__(self, **kwargs):
         super(Coral, self).__init__(**kwargs)
-        self.add_mp()
 
-    def setup_grid(self):
-        """Setup necessary variables for grid """
-        g = netcdf_file(self.gridfile, 'r')
-        self.llat = g.variables['lat_rho'][:]
-        self.llon = g.variables['lon_rho'][:]-360
-        self.depth = g.variables['h'][:]
-        self.Cs_r = g.variables['Cs_r'][:]   
-
-    def load(self,fldname,jd=731583,yr=0,mn=1,dy=1,hr=3):
-        """ Load velocity fields for a given day"""
-        if fldname == "uv":
-            self.load('u',jd=jd, yr=yr, mn=mn, dy=dy, hr=hr)
-            self.load('v',jd=jd, yr=yr, mn=mn, dy=dy, hr=hr)
-            self.uv = np.sqrt(self.u[:,1:,:]**2 + self.v[:,:,1:]**2)
-            return
-        
-        i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
-        if yr!=0:
-            jd = pl.date2num(dtm(yr,mn,dy,hr))
+    def jd2filename(self,jd):
+        if jd == None: jd = 731583 
         filename = "/coral_avg_%05i.nc" % (jd - 731365)
-        nc = pycdf.CDF("%s/%s" % (self.datadir, filename))     
-        fld =  np.squeeze(nc.var(fldname)[:])
-        fld[fld>9999] = np.nan
-        self.__dict__[fldname] = fld
-        self.ssh =  np.squeeze(nc.var('zeta')[:])
-        self.zlev = ((self.depth + self.ssh)[np.newaxis,:,:] *
-                     self.Cs_r[:,np.newaxis,np.newaxis])
-
-    def add_landmask(self):
-        g = pycdf.CDF(self.gridfiile)
-        self.landmask = g.var('mask_rho')[:]
-
-    def add_utmxy(self):
-        g = pycdf.CDF(self.datadir + '/coral_grd.nc')
-        self.utmx = g.var('x_rho')[:]
-        self.utmy = g.var('y_rho')[:]
-        
-
+        return "%s/%s" % (self.datadir, filename)     

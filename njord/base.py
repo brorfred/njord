@@ -135,7 +135,6 @@ class Grid(object):
         for i,j in zip([0,0,1,-1, -1,-1,1,1],[1,-1,0,0,-1,1,-1,1]):
             self.landmask[ii+i,jj+j]=0
 
-
     def timeseries(self, fieldname, jd1, jd2, mask=[]):
         """Create a timeseries of fields using mask to select data"""
         if len(mask)==0: mask = (self.lat !=-800)
@@ -186,7 +185,6 @@ class Grid(object):
     def add_mp(self):
         self.mp = projmap.Projmap(self.map_region)
         
-
     def movie(self,fld='temp', k=39,jd1=730120,jd2=730120+365):
         """Create movie of a field """
         import anim
