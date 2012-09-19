@@ -1,4 +1,5 @@
- === projmap ===
+njord
+=====
 A package to generalize and simplify working with different types of 
 geophysical/oceanographical/meterological data. The package allows for 
 analysis and presentation of data from different sources in a unified
@@ -12,19 +13,20 @@ A class represents a specific dataset.
 A module contains all classes from the same source. They are normally
 setup in the same format. 
 
- == Installation ==
-pip install --user -e git+https://github.com/brorfred/projmap.git#egg=projmap
 
- == Usage ==
+Installation
+------------
+ - (Edit config file and add modules/classes.)
+ - sudo python setup.py install      # global installation
+ - python setup.py install --user    # installation for current user
 
- = Define a project in one of the following files: =
+Define a project in one of the following files:
 
 ./njord.cfg
 ~/.njord.cfg
 /path/to/package/njord.cfg
 
-
- = Example of a config file: =
+Example:
 
 [DEFAULT]
 basedir:     /projData
@@ -37,8 +39,9 @@ imt:         1281
 jmt:         641
 
 
- = Example of usage: = 
-
+Usage
+-----
+```python
 >>> from njord import rutgers 
 >>>
 >>> #Create a grid instance
@@ -46,3 +49,4 @@ jmt:         641
 >>>
 >>> #Load u-velociites
 >>> mp.load('u')
+```
