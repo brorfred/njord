@@ -19,6 +19,8 @@ class MODIS(base.Grid):
         self.lat = self.llat[:,0]
         self.lon = self.llon[0,:]
         self.add_vc()
+        self.datadir = self.datadir + '/A' + self.res + '/' 
+        
 
     def setup_grid(self):
         if self.res is "9km":

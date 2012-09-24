@@ -72,8 +72,8 @@ class Grid(object):
         self.llon = self.llon[self.j1:self.j2, self.i1:self.i2]
 
     def add_ij(self):
-        self.jmat,self.imat = np.meshgrid(np.arange(self.j2-self.j1),
-                                          np.arange(self.i2-self.i1))
+        self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
+                                          np.arange(self.j2-self.j1))
         self.kdijvec = np.vstack((np.ravel(self.imat),
                                   np.ravel(self.jmat))).T
 
@@ -88,11 +88,15 @@ class Grid(object):
         self.kd = cKDTree(list(np.vstack((self.kdlonvec,
                                           self.kdlatvec)).T))
                                           
-    def ll2ij(self,lon,lat,nei=1):
-        if not hasattr(self, 'kd'):
+    def ll2ij(self,lon,lat, mask=None, cutoff=None, nei=1):
+        self.add_ij()
+        if mask is not None:
+            self.add_kd(mask)
+        elif not hasattr(self, 'kd'):
             self.add_kd()
-            self.add_ij()
         dist,ij = self.kd.query(list(np.vstack((lon,lat)).T), nei)
+        if cutoff is not None:
+            ij[dist>cutoff] = 0
         if nei == 1 :
             return self.kdijvec[ij[:] - 1][:, 0], self.kdijvec[ij[:]-1][:, 1]
         else:
