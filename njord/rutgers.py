@@ -10,7 +10,7 @@ import base
 class Rutgers(base.Grid):
     """ Baseclass for all rutgers projects """
     def __init__(self, **kwargs):
-        super(Rutgers, self).__init__()
+        super(Rutgers, self).__init__(**kwargs)
         self.add_mp()
 
     def add_landmask(self):
@@ -54,7 +54,7 @@ class Rutgers(base.Grid):
 class NWA(Rutgers):
     """Setup North West Atlantic"""
     def __init__(self, **kwargs):
-        super(NWA, self).__init__()
+        super(NWA, self).__init__(**kwargs)
 
     def jd2filename(self,jd):
         if jd == None: jd = 730217 
