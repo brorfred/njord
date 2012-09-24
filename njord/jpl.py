@@ -1,11 +1,11 @@
-from datetime import datetime as dtm
-import math
 
+import pylab as pl
 import numpy as np
-import pycdf
-from njord import Njord
+from scipy.io import netcdf_file
 
-class SCB(Njord):
+import base
+
+class SCB(base.Grid):
     """ Manipulate data from the official jpl SCB runs """
     def __init__(self, datadir="/projData/jplSCB/ROMS/",ijarea=[],
                  lat1=None,lat2=None,lon1=None,lon2=None):
@@ -47,40 +47,38 @@ class SCB(Njord):
         self.landmask = msk
 
  
-class NOW(Njord):
+class NOW(base.Grid):
     """ Manipulate data from the NOWCAST jpl SCB runs """
-    def __init__(self, datadir="/projData/jplSCB/NOWCAST/",ijarea=[],
-                 lat1=None,lat2=None,lon1=None,lon2=None):
-        self.i1 = 0
-        self.i2 = 258
-        self.j1 = 0
-        self.j2 = 386
-        self.datadir = datadir
-        g = pycdf.CDF(datadir + '/scb_grid.nc')
-        self.llat = g.var('lat_rho')[:]
-        self.llon = g.var('lon_rho')[:]
-        self.depth = g.var('h')[:]
-        self.sz = np.array([-0.882485522505154, -0.778777844867132,
-                            -0.687254423585503, -0.606483342183883,
-                            -0.535200908367393, -0.472291883107274,
-                            -0.416772032329648, -0.367772728223386,
-                            -0.324527359249072, -0.286359336228826,
-                            -0.252671506867986, -0.222936813095075,
-                            -0.196690045050832, -0.173520562714503,
-                            -0.153065871294677, -0.135005949869352,
-                            -0.11905824454479,  -0.104973247799366,
-                            -0.0925305948496471, -0.0815356159649889,
-                            -0.0718162907903607, -0.0632205570267136,
-                            -0.0556139313622304, -0.0488774054330831,
-                            -0.042905583895255, -0.0376050354769002,
-                            -0.0328928312128658, -0.0286952469915389,
-                            -0.0249466101148999, -0.021588271825806,
-                            -0.0185676897273263, -0.0158376057382559,
-                            -0.0133553067236276, -0.0110819562325242,
-                            -0.00898198688799211, -0.00702254392277909,
-                            -0.00517297115481568, -0.0034043313603439,
-                            -0.00168895354075999, 0.])
+    def __init__(self, **kwargs):
+        super(NOW, self).__init__()
+        self.add_mp()
 
+    def setup_grid(self):
+        """Setup necessary variables for grid """
+        g = netcdf_file(self.gridfile, 'r')
+        self.llat = g.variables['lat_rho'][:]
+        self.llon = g.variables['lon_rho'][:]-360
+        self.depth = g.variables['h'][:]
+        self.Cs_r = np.array([-0.882485522505154, -0.778777844867132,
+                              -0.687254423585503, -0.606483342183883,
+                              -0.535200908367393, -0.472291883107274,
+                              -0.416772032329648, -0.367772728223386,
+                              -0.324527359249072, -0.286359336228826,
+                              -0.252671506867986, -0.222936813095075,
+                              -0.196690045050832, -0.173520562714503,
+                              -0.153065871294677, -0.135005949869352,
+                              -0.11905824454479,  -0.104973247799366,
+                              -0.0925305948496471, -0.0815356159649889,
+                              -0.0718162907903607, -0.0632205570267136,
+                              -0.0556139313622304, -0.0488774054330831,
+                              -0.042905583895255, -0.0376050354769002,
+                              -0.0328928312128658, -0.0286952469915389,
+                              -0.0249466101148999, -0.021588271825806,
+                              -0.0185676897273263, -0.0158376057382559,
+                              -0.0133553067236276, -0.0110819562325242,
+                              -0.00898198688799211, -0.00702254392277909,
+                              -0.00517297115481568, -0.0034043313603439,
+                              -0.00168895354075999, 0.])
 
     def load(self,fldname,jd=0,yr=0,mn=1,dy=1,hr=3):
         """ Load Cali Current fields for a given day"""
@@ -97,17 +95,14 @@ class NOW(Njord):
         yd = jd - pl.date2num(dtm(yr,1,1)) + 1
         filename = "/%04i%02i%02i%02i_da.nc" % (yr,mn,dy,hr)
         print self.datadir + filename
-        nc = pycdf.CDF(self.datadir + filename)        
-        fld =  np.squeeze(nc.var(fldname)[:])
+        nc = netcdf_file(self.datadir + filename)        
+        fld =  np.squeeze(nc.variables[fldname][:]).copy()
         fld[fld==-9999]=np.nan
         self.__dict__[fldname] = fld
-        self.ssh =  np.squeeze(nc.var('zeta')[:])
+        self.ssh =  np.squeeze(nc.variables['zeta'][:])
         self.zlev = ((self.depth + self.ssh)[np.newaxis,:,:] *
-                     self.sz[:,np.newaxis,np.newaxis])
-         
+                     self.Cs_r[:,np.newaxis,np.newaxis])
+        
     def add_landmask(self):
         g = pycdf.CDF(self.datadir + '/scb_grid.nc')
         self.landmask = g.var('mask_rho')[:]
-
-    def add_scbij(self):
-        self.add_ij2ij(SCB())
