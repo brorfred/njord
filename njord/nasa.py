@@ -21,8 +21,8 @@ class MODIS(base.Grid):
         self.add_vc()
         self.datadir = self.datadir + '/A' + self.res + '/' 
         
-
     def setup_grid(self):
+        """Create matrices with latitudes and longitudes for the t-coords"""
         if self.res is "9km":
             self.i1,self.i2,self.j1,self.j2 = (0000 ,4320, 0, 2160)
         elif self.res is "4km":
@@ -35,6 +35,47 @@ class MODIS(base.Grid):
         self.llon = (-180 + x*incr + incr/2)
         self.imt = self.i2
         self.jmt = self.j2
+
+    def load(self,fld,fldtype="DAY",
+             yr=2005, yd=300, mn=1, dy=0, jd=0, nan="nan"):
+        """Load the satellite field associated with a given time."""
+        if fld in ["fqy",]:
+            pass
+        
+        if jd != 0:
+            yr = pl.num2date(jd).year
+            yd = jd - pl.date2num(dtm(yr,1,1)) + 1
+            mn = pl.num2date(jd).month
+        elif dy != 0:
+            yd = (pl.date2num(dtm(yr,mn,dy)) -
+                  pl.date2num(dtm(yr,1,1))) + 1
+        elif yd < 1:
+            yr = yr -1
+            ydmax = (pl.date2num(dtm(yr, 12, 31)) -
+                     pl.date2num(dtm(yr,  1,  1))) + 1    
+            yd = ydmax + yd            
+        ydmax = (pl.date2num(dtm(yr, 12, 31)) -
+                 pl.date2num(dtm(yr,  1,  1))) + 1    
+        if fldtype == "MC":
+            self.add_mnclim()
+            datestr = self.mc_datedict[mn]
+        elif fldtype == "DAY":
+            datestr = "%i%03i" % (yr, yd)
+        elif fldtype == "8D":
+            yd1 = np.arange(1,365,8)
+            yd2 = np.arange(8,370,8)
+            yd2[-1] = ydmax
+            pos = np.nonzero(yd >= yd1)[0].max()
+            datestr = "%i%03i%i%03i" % (yr, yd1[pos], yr, yd2[pos])
+        elif fldtype == "CU":
+            datestr = "20021852011365"
+        else:
+            print "Field type not included"
+        filename = ("A%s.L3m_%s_%s_%s%s" % (datestr, fldtype,
+                                            self.vc[fld][0],
+                                            self.res[0],
+                                            self.vc[fld][1]))
+        self._l3read(filename,fld,nan=nan)
         
     def add_landmask(self):
         """Add a landmask field to the current instance"""
@@ -86,7 +127,7 @@ class MODIS(base.Grid):
         output.write(response.read())
         output.close()
 
-    def l2read(self ,filename,fld):
+    def _l2read(self ,filename,fld):
         i1,i2,j1,j2 = self.ijarea
         """
         try:
@@ -123,7 +164,7 @@ class MODIS(base.Grid):
         """
         return fld
 
-    def l3read(self ,filename,fld='',nan="nan"):
+    def _l3read(self ,filename,fld='',nan="nan"):
         """ Read a L3 mapped file and add field to current instance"""
         filename = self.datadir + '/' + filename
         if not (os.path.isfile(filename) |
@@ -169,47 +210,6 @@ class MODIS(base.Grid):
                 os.system('pbzip2 ' + filename)
             except:
                 raise IOerror( "Compression of " + filename + " failed.")
-
-    def load(self,fld,fldtype="DAY",
-             yr=2005, yd=300, mn=1, dy=0, jd=0, nan="nan"):
-        """Load a satellite field."""
-        if fld in ["fqy",]:
-            pass
-        
-        if jd != 0:
-            yr = pl.num2date(jd).year
-            yd = jd - pl.date2num(dtm(yr,1,1)) + 1
-            mn = pl.num2date(jd).month
-        elif dy != 0:
-            yd = (pl.date2num(dtm(yr,mn,dy)) -
-                  pl.date2num(dtm(yr,1,1))) + 1
-        elif yd < 1:
-            yr = yr -1
-            ydmax = (pl.date2num(dtm(yr, 12, 31)) -
-                     pl.date2num(dtm(yr,  1,  1))) + 1    
-            yd = ydmax + yd            
-        ydmax = (pl.date2num(dtm(yr, 12, 31)) -
-                 pl.date2num(dtm(yr,  1,  1))) + 1    
-        if fldtype == "MC":
-            self.add_mnclim()
-            datestr = self.mc_datedict[mn]
-        elif fldtype == "DAY":
-            datestr = "%i%03i" % (yr, yd)
-        elif fldtype == "8D":
-            yd1 = np.arange(1,365,8)
-            yd2 = np.arange(8,370,8)
-            yd2[-1] = ydmax
-            pos = np.nonzero(yd >= yd1)[0].max()
-            datestr = "%i%03i%i%03i" % (yr, yd1[pos], yr, yd2[pos])
-        elif fldtype == "CU":
-            datestr = "20021852011365"
-        else:
-            print "Field type not included"
-        filename = ("A%s.L3m_%s_%s_%s%s" % (datestr, fldtype,
-                                            self.vc[fld][0],
-                                            self.res[0],
-                                            self.vc[fld][1]))
-        self.l3read(filename,fld,nan=nan)
 
     def histmoller(self, fieldname, jd1, jd2, y1, y2,
                    mask=[], bins=100, logy=True):
