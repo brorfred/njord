@@ -104,5 +104,5 @@ class NOW(base.Grid):
                      self.Cs_r[:,np.newaxis,np.newaxis])
         
     def add_landmask(self):
-        g = pycdf.CDF(self.datadir + '/scb_grid.nc')
-        self.landmask = g.var('mask_rho')[:]
+        g = netcdf_file(self.datadir + '/scb_grid.nc')
+        self.landmask = g.variables['mask_rho'][:]
