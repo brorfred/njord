@@ -3,6 +3,7 @@ from datetime import datetime as dtm
 import numpy as np
 import pylab as pl
 import matplotlib.cm as cm
+from scipy.io import netcdf_file
 
 import pycdf
 
@@ -11,53 +12,46 @@ import gmtgrid
 import figpref
 from hitta import GBRY
 
+import base
 
 class Oscar(base.Grid):
     def __init__(self, **kwargs):
-        super(MODIS, self).__init__(**kwargs)
+        super(Oscar, self).__init__(**kwargs)
 
     def setup_grid(self):
-        gc = pycdf.CDF(self.gridfile)
-        self.lat = gc.var('latitude')[self.i1:self.i2]
-        lon = gc.var('longitude')[self.j1:self.j2]
-        lon[lon>360]=lon[lon>360]-360
-        self.lon,self.gr = gmtgrid.config(lon, dim=0)
+        gc = netcdf_file(self.gridfile)
+        self.lat = gc.variables['latitude'][0:self.jmt]
+        self.gmt = gmtgrid.Shift(gc.variables['longitude'][0:self.imt].copy())
+        self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         
-    def load(self,jd=0,yr=0,mn=1,dy=1):
+    def load(self,**kwargs):
         """ Load Oscar fields for a given day"""
-        i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
-        if jd!=0:
-            yr = pl.num2date(jd).year
-            mn = pl.num2date(jd).month
-            dy = pl.num2date(jd).day
-            md = jd - pl.date2num(dtm(1992,10,05))
-        elif yr!=0:
-            jd = pl.date2num(yr,mn,dy)
-            md  = jd - pl.date2num(dtm(1992,10,05))
-
-        filename ="/oscar_vel%i.nc" % yr
-        filenam2 ="/oscar_vel%i.nc" % (yr+1)
-
-        nc1 = pycdf.CDF(self.datadir + filename)        
-        tvec = nc1.var('time')[:]
+        self._timeparams(**kwargs)
+        md  = self.jd - pl.datestr2num('1992-10-05')
+        filename ="/oscar_vel%i.nc" % self.yr
+        filenam2 ="/oscar_vel%i.nc" % (self.yr+1)
+        nc1 = netcdf_file(self.datadir + filename)        
+        tvec = nc1.variables['time'][:]
         t1 = int(np.nonzero((tvec<=md))[0].max())
         print t1,max(tvec)
         if t1<(len(tvec)-1):
             nc2 = nc1
             t2 = t1 +1
         else:
-            nc2 = pycdf.CDF(self.datadir + filenam2)                    
+            nc2 = netcdf_file(self.datadir + filenam2)                    
             t2 = 0
-  
-        u1 = gmtgrid.convert(nc1.var('u')[t1, 0,i1:i2,j1:j2],self.gr)
-        v1 = gmtgrid.convert(nc1.var('v')[t1, 0,i1:i2,j1:j2],self.gr)
-        u2 = gmtgrid.convert(nc2.var('u')[t2, 0,i1:i2,j1:j2],self.gr)
-        v2 = gmtgrid.convert(nc2.var('v')[t2, 0,i1:i2,j1:j2],self.gr)
+        def readfld(ncvar):
+            return self.gmt.field(ncvar[t1, 0,self.j1:self.j2,
+                                              self.i1:self.i2])  
+        u1 = readfld(nc1.variables['u'])
+        v1 = readfld(nc1.variables['v'])
+        u2 = readfld(nc2.variables['u'])
+        v2 = readfld(nc2.variables['v'])
         rat = float(md-tvec[t1])/float(tvec[t2]-tvec[t1])
         self.u = u2*rat + u1*(1-rat)
         self.v = v2*rat + v1*(1-rat)
-        print jd,md,t1,t2
+        print self.jd,md,t1,t2
 
     def init_nasa(self):
         import nasa
@@ -84,12 +78,8 @@ class Oscar(base.Grid):
 
     def add_landmask(self):
         from scipy.stats import nanmean
-        nc = pycdf.CDF(self.gridfile)
-        u = nc.var('u')[:,:,:,:1081]
-        msk = np.squeeze(nanmean(u,axis=0))
-        msk = msk*0
-        msk[np.isnan(msk)]=1
-        self.landmask = gmtgrid.convert(msk,self.gr)
+        self.load()
+        self.landmask = np.isnan(self.u)
         
     def dchl_dt_time(self):
         i1 = 0

@@ -34,7 +34,7 @@ class Mass(base.Grid):
             self.llon[vec[1]-1, vec[0]-1] = -vec[2]
             self.llat[vec[1]-1, vec[0]-1] = vec[3]
         self.depth = g.variables['depth'][:].copy()
-        self.depth[self.depth == -99999] = np.nan
+        self.depth[self.depth < 0.01] = np.nan
 
         #self.Cs_r = g.variables['Cs_r'][:]
         dayvec = g.variables['time'][:].astype(np.float).copy()

@@ -5,6 +5,7 @@ njord/base.py
 njord/bem.py
 njord/bgccsm.py
 njord/ecco.py
+njord/gmtgrid.py
 njord/gompom.py
 njord/jpl.py
 njord/llinterp.py

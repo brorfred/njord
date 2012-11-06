@@ -1,4 +1,5 @@
 import os, os.path
+import subprocess as sbp
 from datetime import datetime as dtm
 import urllib
 import urllib2
@@ -36,12 +37,13 @@ class MODIS(base.Grid):
         self.imt = self.i2
         self.jmt = self.j2
 
-    def load(self,fld,fldtype="DAY",
-             yr=2005, yd=300, mn=1, dy=0, jd=0, nan="nan"):
+    def load(self,fld,fldtype="DAY", nan="nan",
+             yr=2005, yd=300, mn=1, dy=0, jd=0, ):
         """Load the satellite field associated with a given time."""
         if fld in ["fqy",]:
             pass
-        
+        self._timeparams(**kwargs)
+        """
         if jd != 0:
             yr = pl.num2date(jd).year
             yd = jd - pl.date2num(dtm(yr,1,1)) + 1
@@ -54,6 +56,7 @@ class MODIS(base.Grid):
             ydmax = (pl.date2num(dtm(yr, 12, 31)) -
                      pl.date2num(dtm(yr,  1,  1))) + 1    
             yd = ydmax + yd            
+        """
         ydmax = (pl.date2num(dtm(yr, 12, 31)) -
                  pl.date2num(dtm(yr,  1,  1))) + 1    
         if fldtype == "MC":
@@ -79,13 +82,9 @@ class MODIS(base.Grid):
         
     def add_landmask(self):
         """Add a landmask field to the current instance"""
-        if hasattr(self,'landmask'):
-            return
-        self.load('par','CU')
-        self.par = self.par * 0
-        self.par[np.isnan(self.par)] = 1
-        self.landmask = self.par.copy().astype(np.int8)
-        del(self.par)
+        if not hasattr(self,'landmask'):
+            self.load('par','CU', nan="nan")
+            self.landmask = np.isnan(self.par)
         
     def add_mnclim(self):
         """Add a list with file name dates for Monthly climatologies"""
@@ -127,60 +126,31 @@ class MODIS(base.Grid):
         output.write(response.read())
         output.close()
 
-    def _l2read(self ,filename,fld):
-        i1,i2,j1,j2 = self.ijarea
-        """
-        try:
-            os.system('pbzip2 -d ' + filename)
-        except:
-            print "Decompression of " + filename + " failed."
-            print "File maybe not compressed."
-            filename = filename[:-4]
-        """
-        fH = sd.select(fld)
-        fld = fH[i1:i2,j1:j2].astype('float')
-        fld[fld==fH.attributes()['bad_value_scaled']] = np.nan
-        Intercept = fH.attributes()['intercept']
-        Slope     = fH.attributes()['slope']
-        try:
-            Base  = fH.attributes()['base']
-            fld = Base**((Slope*fld) + Intercept)
-        except KeyError:
-            fld = ((Slope*fld) + Intercept)
-        """
-        start_iso = (pl.date2num(datetime.datetime(
-                    sd.attributes()['Period Start Year'],1,1)) +
-                     sd.attributes()['Period Start Day'] - 1)
-        end_iso   = (pl.date2num(datetime.datetime(
-                    sd.attributes()['Period End Year'],1,1)) +
-                     sd.attributes()['Period End Day'] - 1)
-        self.date = pl.num2date((start_iso+end_iso)/2)
-        self.iso  = ((start_iso+end_iso)/2)
-
-        try:
-            os.system('pbzip2 ' + filename)
-        except:
-            print "Compression of " + filename + " failed."
-        """
-        return fld
-
     def _l3read(self ,filename,fld='',nan="nan"):
         """ Read a L3 mapped file and add field to current instance"""
         filename = self.datadir + '/' + filename
-        if not (os.path.isfile(filename) |
-                os.path.isfile(filename +'.bz2')):
+        zipfname = filename + '.bz2'
+
+        def try_to_unzip():
+            if not os.path.isfile(filename):
+                err = sbp.call(["pbzip2", "-d", zipfname])
+                if err == 1:
+                    print "Decompression of " + zipfname + " failed."
+                    print "Trying to download again"
+                    self.download(filename)
+                    err = sbp.call(["pbzip2", "-d", zipfname])
+                    if err == 1:
+                        raise IOError, "Download file failed."
+                return True
+            else:
+                return False
+        
+        if not (os.path.isfile(filename) | os.path.isfile(zipfname)):
             print "File missing, downloading from GSFC"
             self.download(filename)
+        zipped = try_to_unzip()
+   
         if not fld: fld = filename.rsplit('_')[-2]
-
-        zipped = False
-        if os.path.isfile(filename + ".bz2"):
-            try:
-                os.system('pbzip2 -d ' + filename + ".bz2")
-            except:
-                raise IOerror( "Decompression of " + filename + " failed.")
-            zipped = True
-
         sd = SD(filename, SDC.READ)
         l3m_data  = np.ma.masked_values(
             sd.select('l3m_data')[self.j1:self.j2, self.i1:self.i2],65535)
@@ -206,9 +176,8 @@ class MODIS(base.Grid):
         self.jd   = ((start_iso+end_iso)/2)
 
         if zipped:
-            try:
-                os.system('pbzip2 ' + filename)
-            except:
+            err = sbp.call(["pbzip2", filename])
+            if err ==1 :
                 raise IOerror( "Compression of " + filename + " failed.")
 
     def histmoller(self, fieldname, jd1, jd2, y1, y2,

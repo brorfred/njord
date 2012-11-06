@@ -14,6 +14,7 @@ from scipy.stats import nanmean
 
 import pycdf
 
+import base
 import gmtgrid
 import grid
 import bln
@@ -24,63 +25,53 @@ lsd = 3600*24*1000
 def nodimb(a,b): return (a-b) / b
 
 
-class Tpz:
-    def __init__(self, datadir='/projData/TOPAZ/',
-                 t1=None, t2=None, k1=None, k2=None,
-                 i1=None, i2=None, j1=None, j2=None,area=None,
-                 ln='', dt=''):
+class Tpz(base.Grid):
+    def __init__(self, **kwargs):
         """Init the class and setup the grid. Paths are defined here."""
-        self.datadir = datadir
-        self.t1 = t1; self.t2 = t2
-        self.i1 = i1; self.i2 = i2
-        self.j1 = j1; self.j2 = j2
-        self.k1 = k1; self.k2 = k2
-        if area:
-            self.i1 = area(0); self.i2 = area(1)
-            self.j1 = area(2); self.j2 = area(3)
-            self.k1 = area(4); self.k2 = area(5)        
-        self.create_pardict(ln, dt)
+        super(Tpz, self).__init__(**kwargs)
+        self.create_pardict(lnmsk='', dtmsk='')
         self.keypref = '1d_1yr_'
 
-        vd = self.vd
-        def load(keysuff):
-            n = pycdf.CDF(vd[self.keypref + keysuff][5])
-            return n.var(vd[self.keypref + keysuff][0])[:]
+        self._setup_time()
+        self._setup_fields()
+        self.gcm = 'tpz'
 
-        self.tvec = load('time')[t1:t2] + 623542
-        self.tops = self.tvec
 
-        #Grid definitions
-        g = pycdf.CDF(datadir + 'grid_spec_cm2_ocean_tripolar.nc')
+    def setup_grid(self):
+        """Setup necessary variables for grid """
+        g = pycdf.CDF(self.gridfile)
 
-        lon = g.var('gridlon_t')[:]
-        self.lon,self.gr = gmtgrid.config(lon,dim=0)
-        self.lon = self.lon[j1:j2]
-        self.lat = g.var('gridlat_t')[i1:i2]
-        self.dxt = gmtgrid.convert(g.var('dxt')[:], self.gr)[i1:i2,j1:j2]
-        self.dyt = gmtgrid.convert(g.var('dyt')[:], self.gr)[i1:i2,j1:j2]
-        self.dxu = gmtgrid.convert(g.var('dxu')[:], self.gr)[i1:i2,j1:j2]
-        self.dyu = gmtgrid.convert(g.var('dyu')[:], self.gr)[i1:i2,j1:j2]
-        self.dzt = gmtgrid.convert(g.var('dz_t')[:], self.gr)[k1:k2,i1:i2,j1:j2]
-        self.zlev = gmtgrid.convert(g.var('dz_t')[:], self.gr)[k1:k2]
-        self.dz =  g.var('dz_t')[k1:k2,25,30]
+        self.gmt = gmtgrid.Shift(g.var('gridlon_t')[:])
+        self.lon = (self.gmt.lonvec).astype(np.float32)
+        self.lat   = g.var('gridlat_t')[:]
+        self.depth = self.gmt.field(g.var('depth_t')[:])
+        self.dxt   = self.gmt.field(g.var('dxt')[:])
+        self.dyt   = self.gmt.field(g.var('dyt')[:])
+        self.dxu   = self.gmt.field(g.var('dxu')[:])
+        self.dyu   = self.gmt.field(g.var('dyu')[:])
+        self.dzt   = self.gmt.field(g.var('dz_t')[:])
+        self.zlev  = self.gmt.field(g.var('dz_t')[:])
+        if not hasattr(self, 'k1'): k1 = 0
+        if not hasattr(self, 'k2'): k2 = len(self.zlev)
+        self.dz    =  g.var('dz_t')[k1:k2,25,30]
         self.vol = ( self.dxt[np.newaxis,...] * 
                      self.dyt[np.newaxis,...]*self.dzt)
         self.vol[self.vol<0] = np.nan
-        self.zlev = [0,] + np.cumsum(self.dz)-10
+        #self.zlev = [0,] + np.cumsum(self.dz)-10
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         self.area = self.dxt * self.dyt
-
         for v in ['dzt','llon','llat']:
             self.__dict__[v] = self.__dict__[v].astype(np.float32)
 
-        #Loadable fields
+
+    def _setup_fields(self):
         self.pa = {'nwnd':'wind','mldp':'mld','o2st':'o2_saturation',
                    'o2ct':'o2', 'arst':'ar_sat_o2satar', 'ncpo':'jo2',
                    'arct':'ar', 'temp':'temp', 'salt':'salt',
                    'hblt':'hblt','no3c':'no3','fedc':'fed',
                    'poco':'nphyto_tot',
                    'o2fl':'sfc_flux_o2','arfl':'sfc_flux_ar',
+                   'cofl':'sfc_flux_co2',
                    'neo2':'neutral_o2','dfo2':'o2_zflux_diff',
                    'ssht':'eta_t','chlo':'chl',
                    'uvel':'u','vvel':'v','sshu':'dhu'}
@@ -90,6 +81,7 @@ class Tpz:
             self.slope[a]=1
         self.slope['ncpo'] = lsd
         self.slope['o2fl'] = -lsd
+        self.slope['cofl'] = -lsd
         self.slope['neo2'] = lsd
         self.slope['dfo2'] = lsd
         self.slope['o2ct'] = 1000 
@@ -101,18 +93,19 @@ class Tpz:
         self.slope['fedc'] = 1e6
         self.slope['uvel'] = 3600*24
         self.slope['vvel'] = 3600*24
-
-        self.gcm = 'tpz'
-
-        def lim(val1,val2):
-            if not val1: return val2
-            return val1
-        self.t1 = lim(t1,0); self.t2 = lim(t2,len(self.tvec))
-        self.i1 = lim(i1,0); self.i2 = lim(i2,self.llat.shape[0])
-        self.j1 = lim(j1,0); self.j2 = lim(j2,self.llat.shape[1])
-        self.k1 = lim(k1,0); self.k2 = lim(k2,len(self.zlev))
-
         self.fields = []
+
+
+    def _setup_time(self):
+
+        if not hasattr(self, 't1'): self.t1 = 0
+        if not hasattr(self, 't2'): self.t2 = -1
+        def load(keysuff):
+            n = pycdf.CDF(self.vd[self.keypref + keysuff][5])
+            return n.var(self.vd[self.keypref + keysuff][0])[:]
+        self.tvec = load('time')[self.t1:self.t2] + 623542
+        self.tops = self.tvec
+
 
     def condload(self, parlist):
         for par in (parlist):
@@ -143,23 +136,14 @@ class Tpz:
                 mld[mld==k] = self.zlev[k]-self.dz[k]/2.0
             self.d003 = mld
             return
+        elif par == 'depth':
+            return
         elif par == 'mldk':
             self.condload( ('mldp',) )
             self.mldk = np.ceil(np.interp(self.mldp, 
                                           self.zlev, np.arange(50)) )
             return
-            """
-            if d003:
-                if not hasattr(self,'d003'):
-                    self.load('d003')
-                mld = self.d003
-            else:
-                self.condload( ('o2ct','o2st','arct','arst') )
-
-            mld = self.mldp
-            zl = np.cumsum(self.dz)
-            self.mldk = np.interp(mld, zl, np.arange(50))
-            """
+  
         
         elif par == 'wwfl':
             self.condload( ('o2ar','dens','nwnd','mldp') )
@@ -205,9 +189,6 @@ class Tpz:
             self.nnlg[self.nnlg>1e6] = 0
             self.nnlg[self.nnlg<-1e6] = 0
             self.cnt  = self.ncpm[:] * 0
-            
-            #wlg = np.floor((self.mldp/
-            #                wind2pv(self.temp[:,0,:,:],self.nwnd))/np.log(2))
             wlg = np.floor((self.mldp/self.wpv)/np.log(2))
             wlg[wlg>60] = 60
             for t in np.arange(60,self.ncpm.shape[0]):
@@ -216,7 +197,6 @@ class Tpz:
                     self.nnlg[t,msk] = self.nnlg[t,msk] + self.ncpm[t-b,msk]
                     self.cnt[t,msk]  = self.cnt[t,msk] + 1
             self.nnlg = self.nnlg/self.cnt
-            #del self.cnt
             return
         
         elif par == 'nrm10':
@@ -245,8 +225,7 @@ class Tpz:
             for v in  ['temp','mldp','dens','wpv','nwnd']:
                 self.__dict__[v] = self.__dict__[v][60:,...] 
             return
-
-
+        
         elif par == 'crwnd':
             self.fields[-1] = 'nwnd'
             import winds
@@ -384,11 +363,13 @@ class Tpz:
 
     def create_months(self):
         self.months = np.array([ dt.month for dt in pl.num2date(self.tvec)])
-
-
+        
     def get_corewind(self):
         xi,yi = np.meshgrid(np.arange(360),np.arange(200))
         x,y = np.meshgrid(np.arange(94),np.arange(192))
+
+    def add_landmask(self):
+        self.landmask = self.depth == 0
 
     def add_seaslen(self,dfn='ncpm'):
         if dfn == 'o2ar':
@@ -414,25 +395,3 @@ class Tpz:
             self.seaslen = msk
             self.seaslen[:] = seaslen
 
-
-    def add_ij(self):
-        self.jmat,self.imat = np.meshgrid(np.arange(self.j2-self.j1),
-                                          np.arange(self.i2-self.i1))
-        self.ijvec = np.vstack((np.ravel(self.imat),np.ravel(self.jmat))).T
-    def add_kd(self,mask=None):
-        from scipy.spatial import KDTree, cKDTree
-
-        latvec = np.ravel(self.llat)
-        lonvec = np.ravel(self.llon)
-        if not mask is None: 
-            latvec = latvec[~np.isnan(np.ravel(mask))]
-            lonvec = lonvec[~np.isnan(np.ravel(mask))]
-            self.add_ij()
-            self.ijvec = self.ijvec[~np.isnan(np.ravel(mask))]
-        self.kd = cKDTree(list(np.vstack((lonvec,latvec)).T))
-    def ll2ij(self,lon,lat,nei=1):
-        if not hasattr(self,'imat'):
-            self.add_kd()
-            self.add_ij()
-        dist,ij = self.kd.query(list(np.vstack((lon,lat)).T),nei)
-        return self.ijvec[ij-1][:,0],self.ijvec[ij-1][:,1]

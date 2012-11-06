@@ -7,6 +7,7 @@ import numpy as np
 import pylab as pl
 from scipy.spatial import cKDTree
 
+import gmtgrid
 import projmap
 import figpref
 
@@ -65,25 +66,29 @@ class Grid(object):
         if 'latlon' in self.inkwargs.keys():
             self.lon1,self.lon2,self.lat1,self.lat2 = self.inkwargs['latlon']
         if hasattr(self,'lat1'):
-            if self.llat[-1,0] <  self.llat[0,0]: 
-                self.j1 = int(np.nonzero(self.llat>self.lat2)[0].max() + 1)
+            if self.llat[-1,0] <  self.llat[0,0]:
+                self.j2 = int(np.nonzero(self.llat>self.lat1)[0].max() + 1)
             else:
-                self.j1 = int(np.nonzero(self.llat<self.lat1)[0].max() - 1)
+                self.j1 = int(np.nonzero(self.llat<self.lat1)[0].max())
         if hasattr(self,'lat2'):
             if self.llat[-1,0] <  self.llat[0,0]: 
-                self.j2 = int(np.nonzero(self.llat<self.lat1)[0].min() - 1)
+                self.j1 = int(np.nonzero(self.llat<self.lat2)[0].min()-1)
             else:
                 self.j2 = int(np.nonzero(self.llat>self.lat2)[0].min() + 1)
         if hasattr(self,'lon1'):
-            self.i1 = int(np.nonzero(self.llon<self.lon1)[1].max() - 1) 
+            self.i1 = int(np.nonzero(self.llon<=self.lon1)[1].max()) 
         if hasattr(self,'lon2'):
-            self.i2 = int(np.nonzero(self.llon>self.lon2)[1].min() + 1)
+            self.i2 = int(np.nonzero(self.llon>=self.lon2)[1].min() + 1) 
 
+        self.lat = self.llat[self.j1:self.j2]
+        self.lon = self.llon[self.j1:self.j2]
         self.llat = self.llat[self.j1:self.j2, self.i1:self.i2]
         self.llon = self.llon[self.j1:self.j2, self.i1:self.i2]
-        if hasattr(self,'depth'):
-            self.depth = self.depth[self.j1:self.j2, self.i1:self.i2]
 
+        for var in ['depth','dxt','dyt','dxu','dyu','dzt','area','vol']:
+            if hasattr(self,var):
+                self.__dict__[var] = self.__dict__[var][self.j1:self.j2,
+                                                        self.i1:self.i2]
 
     def _timeparams(self, **kwargs):
         """Calculate time parameters from given values"""
@@ -99,14 +104,17 @@ class Grid(object):
         elif  ('yr' in kwargs) & ('mn' in kwargs) & ('dy' in kwargs):
             self.jd = pl.date2num(dtm(self.yr,self.mn,self.dy))
         elif not 'jd' in kwargs:
-            raise KeyError, "Time parameter missing"
+            if hasattr(self, 'defaultjd'):
+                self.jd = self.defaultjd
+            else:
+                raise KeyError, "Time parameter missing"
+        self._jd_to_dtm()
 
+    def _jd_to_dtm(self):
         for jdpar,dtpar in zip(['yr','mn','dy','hr','min','sec'],
-                              ['%Y','%m','%d','%H','%M', '%S']):
+                               ['%Y','%m','%d','%H','%M', '%S']):
             self.__dict__[jdpar] = int(pl.num2date(self.jd).strftime(dtpar))
         self.yd = self.jd - pl.date2num(dtm(self.yr,1,1)) + 1
-
-
 
     def add_ij(self):
         self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
@@ -157,6 +165,7 @@ class Grid(object):
         return fldvec
         
     def ll2ij(self,lon,lat, mask=None, cutoff=None, nei=1):
+        """Reproject a lat-lon vector to i-j grid coordinates"""
         self.add_ij()
         if mask is not None:
             self.add_kd(mask)
@@ -171,12 +180,46 @@ class Grid(object):
             return (np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0],
                     np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1])
 
-    def add_ij2ij(self,sc):
-        sci,scj = sc.ll2ij(np.ravel(self.llon),np.ravel(self.llat))
+    def add_ij2ij(self, njord_obj):
+        sci,scj = njord_obj.ll2ij(np.ravel(self.llon),np.ravel(self.llat))
         self.sci = sci.reshape(self.i2,self.j2)
         self.scj = scj.reshape(self.i2,self.j2)
 
+    def add_njijvec(self, njord_obj):
+        lonvec = np.ravel(njord_obj.llon)
+        latvec = np.ravel(njord_obj.llat)
+        lonmsk = (lonvec>=self.llon.min()) & (lonvec<=self.llon.max())
+        latmsk = (latvec>=self.llat.min()) & (latvec<=self.llat.max()) 
+        self.nj_mask = lonmsk & latmsk
+        self.nj_ivec,self.nj_jvec = self.ll2ij(lonvec[self.nj_mask],
+                                               latvec[self.nj_mask])
+
+    def reproject(self, njord_obj, field):
+        """Reproject a field of another njord object to the current grid"""
+        if not hasattr(self,'nj_ivec'): self.add_njijvec(njord_obj)
+        xy = np.vstack((self.nj_jvec, self.nj_ivec))
+        if type(field) == str:
+            weights = np.ravel(njord_obj.__dict__[field])[self.nj_mask]
+        else:
+            weights = np.ravel(field)[self.nj_mask]
+        mask = ~np.isnan(weights) 
+        flat_coord = np.ravel_multi_index(xy[:,mask],
+                                          (self.j2-self.j1, self.i2-self.i1))
+        sums = np.bincount(flat_coord, weights[mask])
+        cnts = np.bincount(flat_coord)
+        fld = np.zeros((self.j2-self.j1, self.i2-self.i1)) * np.nan
+        fld.flat[:len(sums)] = sums.astype(np.float)/cnts
+        try:
+            self.add_landmask()
+            fld[self.landmask] = np.nan
+        except:
+            print "Couldn't load landmask for %s" % self.projname
+        return fld
+
+
+
     def decheck(self,fieldname=None):
+        """Remove checkerboarding by smearing the field"""
         if not fieldname: 
             fieldname = self.last_loaded_feld
         fld = self.__dict__[fieldname]
@@ -254,15 +297,22 @@ class Grid(object):
         for v in self.__dict__.keys():
             self.__dict__[v] = dmpfile[v]
 
-    def add_mp(self):
+    def add_mp(self, map_region=None):
+        if map_region is not None:
+            self.map_region = map_region
         self.mp = projmap.Projmap(self.map_region)
 
     def pcolor(self,fld):
         """Make a pcolor-plot of field"""
         figpref.current()
+        if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
+        if type(fld) == str:
+            field = self.__dict__[field]
+        else:
+            field = fld
         x,y = self.mp(self.llon, self.llat)
-        self.mp.pcolormesh(x,y,miv(fld))
+        self.mp.pcolormesh(x,y,miv(field))
         self.mp.nice()
         
     def movie(self,fld, jdvec, k=0, c1=0,c2=10):
