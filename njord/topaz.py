@@ -51,9 +51,9 @@ class Tpz(base.Grid):
         self.dyu   = self.gmt.field(g.var('dyu')[:])
         self.dzt   = self.gmt.field(g.var('dz_t')[:])
         self.zlev  = self.gmt.field(g.var('dz_t')[:])
-        if not hasattr(self, 'k1'): k1 = 0
-        if not hasattr(self, 'k2'): k2 = len(self.zlev)
-        self.dz    =  g.var('dz_t')[k1:k2,25,30]
+        if not hasattr(self, 'k1'): self.k1 = 0
+        if not hasattr(self, 'k2'): self.k2 = len(self.zlev)
+        self.dz    =  g.var('dz_t')[self.k1:self.k2,25,30]
         self.vol = ( self.dxt[np.newaxis,...] * 
                      self.dyt[np.newaxis,...]*self.dzt)
         self.vol[self.vol<0] = np.nan
@@ -99,7 +99,7 @@ class Tpz(base.Grid):
     def _setup_time(self):
 
         if not hasattr(self, 't1'): self.t1 = 0
-        if not hasattr(self, 't2'): self.t2 = -1
+        if not hasattr(self, 't2'): self.t2 = None
         def load(keysuff):
             n = pycdf.CDF(self.vd[self.keypref + keysuff][5])
             return n.var(self.vd[self.keypref + keysuff][0])[:]
@@ -288,24 +288,22 @@ class Tpz(base.Grid):
             self.fields[-1] = par
 
         elif 'zt_ocean' in vd[key][1] and surf:
-            fld = self.utcgrid(
-                scale(n.var(vd[key][0])[t1:t2,0,i1:i2,j1:j2]))
+            fld = self.gmt.field(scale(n.var(vd[key][0])[t1:t2,0,    j1:j2,:]))
         elif 'zt_ocean' in vd[key][1]:
-            fld = self.utcgrid(
-                scale(n.var(vd[key][0])[t1:t2,k1:k2,i1:i2,j1:j2]))
+            fld = self.gmt.field(scale(n.var(vd[key][0])[t1:t2,k1:k2,j1:j2,:]))
         else:
-            fld = self.utcgrid(
-                scale(n.var(vd[key][0])[t1:t2,i1:i2,j1:j2]))
+            fld = self.gmt.field(scale(n.var(vd[key][0])[t1:t2,      j1:j2,:]))
         print par + ": ", fld.shape
         fld[fld <-1e9] = np.nan
         fld[fld > 1e9] = np.nan
-        self.__dict__[par] = fld
+        self.__dict__[par] = fld[...,self.i1:self.i2]
 
     def t2iso(t):
         baseiso = mpl.dates.date2num(datetime.datetime(1948,1,1))
         return baseiso + t - 1
 
     def utcgrid(self, fld):
+        """
         if hasattr(self,'par') and self.par == "nwnd":
             fld = self.scl(fld)
         elif fld.shape[-1]!=360:
@@ -316,7 +314,7 @@ class Tpz(base.Grid):
             fld[...,260:] = wstfld
             del wstfld
         return fld
-    
+        """
     def create_pardict(self,lnmsk='',dtmsk=''):
         vardict = {}
         for f in glob.glob(self.datadir + "/*/*.nc"):

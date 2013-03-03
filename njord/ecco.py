@@ -1,11 +1,9 @@
 import os, urllib2
 from datetime import datetime as dtm
-import math
 
 import numpy as np
 import pylab as pl
-import matplotlib.cm as cm
-from scipy.io import netcdf_file, netcdf_variable
+from scipy.io import netcdf_file
 
 import base
 import gmtgrid
@@ -15,6 +13,11 @@ class Glob_025_ll(base.Grid):
     def __init__(self, **kwargs):
         super(Glob_025_ll, self).__init__(**kwargs)
         self.add_mp()
+        self.pardict = {'uvel':'UVEL',
+                        'vvel':'VVEL',
+                        'wvel':'WVEL',
+                        'salt':'SALT',
+                        'temp':'THETA'}
 
     def setup_grid(self):
         """Setup necessary variables for grid """
@@ -25,16 +28,10 @@ class Glob_025_ll(base.Grid):
         self.zlev = g.variables['DEPTH_T'][:]
         mat = np.squeeze(g.variables['VVEL'][:].copy())
         mat[mat==0] = np.nan
-        self.depth = np.nanmax((self.zlev[:,np.newaxis,np.newaxis] *
-                                (mat*0+1)),axis=0)
+        self.depth = self.gmt.field(np.nanmax((
+            self.zlev[:,np.newaxis,np.newaxis] * (mat*0+1)),axis=0))
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
-        #self.llon = gmtgrid.convert(self.llon, self.gmtS)
-        self.pardict = {'uvel':'UVEL',
-                        'vvel':'VVEL',
-                        'wvel':'WVEL',
-                        'salt':'SALT',
-                        'temp':'THETA'}
-
+        
     def load(self, fldname, **kwargs):
         """ Load velocity fields for a given day"""
         if fldname == "uv":
@@ -45,7 +42,6 @@ class Glob_025_ll(base.Grid):
         self._timeparams(**kwargs)
         self.jd = np.round((self.jd+1)/3)*3-1
         self._jd_to_dtm()
-
         filename = ("%s/%s.1440x720x50.%04i%02i%02i.nc" %
                     (self.datadir, self.pardict[fldname],
                      self.yr,self.mn,self.dy))

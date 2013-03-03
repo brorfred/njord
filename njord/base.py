@@ -80,8 +80,8 @@ class Grid(object):
         if hasattr(self,'lon2'):
             self.i2 = int(np.nonzero(self.llon>=self.lon2)[1].min() + 1) 
 
-        self.lat = self.llat[self.j1:self.j2]
-        self.lon = self.llon[self.j1:self.j2]
+        if hasattr(self, 'lat'): self.lat  = self.lat[self.j1:self.j2]
+        if hasattr(self, 'lon'): self.lon  = self.lon[self.i1:self.i2]
         self.llat = self.llat[self.j1:self.j2, self.i1:self.i2]
         self.llon = self.llon[self.j1:self.j2, self.i1:self.i2]
 
@@ -123,7 +123,7 @@ class Grid(object):
                                   np.ravel(self.jmat))).T
 
     def add_kd(self, mask=None, coord="lonlat"):
-        """Generate a KD-tree objects and add to the current njord instance"""
+        """Generate a KD-tree objects and for the current njord instance"""
         if coord == "ij":
             self.add_ij()
             xvec = self.kdivec = np.ravel(self.imat)
@@ -164,7 +164,7 @@ class Grid(object):
             print fldvec[dpos]
         return fldvec
         
-    def ll2ij(self,lon,lat, mask=None, cutoff=None, nei=1):
+    def ll2ij(self, lon, lat, mask=None, cutoff=None, nei=1):
         """Reproject a lat-lon vector to i-j grid coordinates"""
         self.add_ij()
         if mask is not None:
@@ -180,6 +180,24 @@ class Grid(object):
             return (np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0],
                     np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1])
 
+    def fld2vec(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
+                cutoff=None, nei=1):
+        """Get data from the lat-lon-jd positions """
+        if maskvec is not None:
+            lonvec = lonvec[maskvec]
+            latvec = latvec[maskvec]
+            jdvec  = jdvec[maskvec]
+        intjdvec  = ((jdvec / djd).astype(np.int)) * djd
+        ivec,jvec = self.ll2ij(lonvec, latvec)#, cutoff, nei) 
+        fldvec    = jdvec * np.nan
+        for n,jd in enumerate(np.unique(intjdvec)):
+            print intjdvec.max() - jd
+            mask = intjdvec == jd
+            fld = self.get_field(fldname, jd=jd)
+            #fldvec[mask] = fld[jvec[mask], ivec[mask]]
+            fldvec[mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
+        return fldvec
+            
     def add_ij2ij(self, njord_obj):
         sci,scj = njord_obj.ll2ij(np.ravel(self.llon),np.ravel(self.llat))
         self.sci = sci.reshape(self.i2,self.j2)
@@ -195,19 +213,20 @@ class Grid(object):
                                                latvec[self.nj_mask])
 
     def reproject(self, njord_obj, field):
-        """Reproject a field of another njord object to the current grid"""
+        """Reproject a field of another njord inst. to the current grid"""
         if not hasattr(self,'nj_ivec'): self.add_njijvec(njord_obj)
+        di = self.i2 - self.i1
+        dj = self.j2 - self.j1
         xy = np.vstack((self.nj_jvec, self.nj_ivec))
         if type(field) == str:
             weights = np.ravel(njord_obj.__dict__[field])[self.nj_mask]
         else:
             weights = np.ravel(field)[self.nj_mask]
         mask = ~np.isnan(weights) 
-        flat_coord = np.ravel_multi_index(xy[:,mask],
-                                          (self.j2-self.j1, self.i2-self.i1))
+        flat_coord = np.ravel_multi_index(xy[:,mask],(dj, di))
         sums = np.bincount(flat_coord, weights[mask])
         cnts = np.bincount(flat_coord)
-        fld = np.zeros((self.j2-self.j1, self.i2-self.i1)) * np.nan
+        fld = np.zeros((dj, di)) * np.nan
         fld.flat[:len(sums)] = sums.astype(np.float)/cnts
         try:
             self.add_landmask()
@@ -215,8 +234,6 @@ class Grid(object):
         except:
             print "Couldn't load landmask for %s" % self.projname
         return fld
-
-
 
     def decheck(self,fieldname=None):
         """Remove checkerboarding by smearing the field"""
@@ -233,8 +250,8 @@ class Grid(object):
         fld[:,-1,:-1] = flint
         fld[:,:-1,-1] = fljnt
 
-    def get_field(self, field, jd):
-        self.load(field,jd=jd)
+    def get_field(self, field,  **kwargs):
+        self.load(field, **kwargs)
         return self.__dict__[field]
 
     def get_landmask(self):
@@ -298,22 +315,37 @@ class Grid(object):
             self.__dict__[v] = dmpfile[v]
 
     def add_mp(self, map_region=None):
+        """ Add a projmap instance as defined in the config file"""
         if map_region is not None:
             self.map_region = map_region
         self.mp = projmap.Projmap(self.map_region)
 
-    def pcolor(self,fld):
+    def pcolor(self,fld, **kwargs):
         """Make a pcolor-plot of field"""
         figpref.current()
         if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
         if type(fld) == str:
-            field = self.__dict__[field]
+            field = self.__dict__[fld]
         else:
             field = fld
         x,y = self.mp(self.llon, self.llat)
-        self.mp.pcolormesh(x,y,miv(field))
+        self.mp.pcolormesh(x,y,miv(field), **kwargs)
         self.mp.nice()
+
+    def contour(self,fld, *args, **kwargs):
+        """Make a pcolor-plot of field"""
+        figpref.current()
+        if not hasattr(self, 'mp'): self.add_mp()
+        miv = np.ma.masked_invalid
+        if type(fld) == str:
+            field = self.__dict__[fld]
+        else:
+            field = fld
+        x,y = self.mp(self.llon, self.llat)
+        self.mp.contour(x,y,miv(field), *args, **kwargs)
+        self.mp.nice()
+
         
     def movie(self,fld, jdvec, k=0, c1=0,c2=10):
         """Create a movie of a field """
@@ -325,7 +357,8 @@ class Grid(object):
             self.pcolor(self.__dict__[fld][k,:,:])
             pl.clim(c1, c2)
             pl.colorbar(pad=0,aspect=40)
-            pl.title('%s %s' % (fld, pl.num2date(jd).strftime('%Y-%m-%d %H:%M')))
+            pl.title('%s %s' % (fld, pl.num2date(jd)
+                                .strftime('%Y-%m-%d %H:%M')))
             mv.image()
         mv.video()
 

@@ -62,6 +62,57 @@ class Seawinds(base.Grid):
 	else:
    	    self.nwnd = gmtgrid.convert(np.squeeze(np.sqrt(u**2 + v**2)),self.gr)
 
+
+
+class CCMP(base.Grid):
+    """Read jpl CCMP fields
+    http://podaac.jpl.nasa.gov/dataset/CCMP_MEASURES_ATLAS_L4_OW_L3_0_WIND_VECTORS_FLK
+     ftp://podaac-ftp.jpl.nasa.gov/allData/ccmp/
+
+    """
+    def __init__(self, **kwargs):
+        """Initialize the class with stuff from base.Grid"""
+	super(CCMP, self).__init__(**kwargs)
+	
+    def setup_grid(self):
+	"""Setup lat-lon matrices for CCMP"""
+	try:
+	    gc = netcdf_file(self.gridfile, 'r')
+        except:
+            print 'Error opening the gridfile %s' % datadir + filename
+            raise
+        self.lat = gc.variables['lat'][:]
+	self.gmt = gmtgrid.Shift(gc.variables['lon'][:].copy())
+        self.lon = self.gmt.lonvec 
+        self.llon,self.llat = np.meshgrid(self.lon,self.lat)
+
+    def load(self, fld="nwnd", **kwargs):
+	"""Load field for a given julian date. Returns u,v, or nwnd(windnorm)"""
+        self._timeparams(**kwargs)
+	filename = os.path.join(self.datadir,
+				"analysis_%04i%02i%02i_v11l30flk.nc" %
+                                  	(self.yr,self.mn,self.dy))
+        if os.path.isfile(filename):
+            nc = netcdf_file(filename)
+        else:
+            raise IOError, 'Error opening the windfile %s' % filename
+	uH = nc.variables['uwnd']
+	vH = nc.variables['vwnd']
+	uvel = self.gmt.field(uH.data.copy()) * uH.scale_factor
+	vvel = self.gmt.field(vH.data.copy()) * vH.scale_factor
+	
+	uvel[uvel<(uH.missing_value * uH.scale_factor)] = np.nan
+	vvel[vvel<(vH.missing_value * vH.scale_factor)] = np.nan
+	if (fld=="u") | (fld=="uvel"):
+	    self.uvel = gmtgrid.convert(np.squeeze(u), self.gr)
+	elif (fld=="v") | (fld=="vvel"):
+	    self.vvel = gmtgrid.convert(np.squeeze(v), self.gr)
+	else:
+   	    self.nwnd = gmtgrid.convert(np.squeeze(np.sqrt(u**2 + v**2)),self.gr)
+
+
+
+
 class ncep:
 
     def __init__(self,datadir = "/projData/ncep/"):
@@ -97,7 +148,7 @@ class ncep:
         nwnd[nwnd>200]=np.nan
         return nwnd
 
-class quikscat(Winds):
+class Quikscat(Winds):
     
     def __init__(self,datadir = "/projData/QUIKSCAT/"):
         self.lat,self.lon = bln.grid()
@@ -110,7 +161,7 @@ class quikscat(Winds):
         #nwnd[nwnd>200]=np.nan
         return nwnd
 
-class core2:
+class CORE2:
 
     def __init__(self,datadir = "/projData/CORE2/"):
         self.jdbase = pl.date2num(dtm(1948,1,1))+15
@@ -124,6 +175,7 @@ class core2:
         self.lon,self.gr = gmtgrid.config(n.var('LON')[:],dim=0)
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         n.close()
+	
     def load(self,jd1,jd2=None):
         yr = pl.num2date(jd1).year
         mn = pl.num2date(jd1).month
