@@ -9,7 +9,11 @@ from scipy.spatial import cKDTree
 
 import gmtgrid
 import projmap
-import figpref
+try:
+    import figpref
+    USE_FIGPREF = True
+except:
+    USE_FIGPREF = False
 
 dtm = datetime.datetime
 
@@ -322,7 +326,7 @@ class Grid(object):
 
     def pcolor(self,fld, **kwargs):
         """Make a pcolor-plot of field"""
-        figpref.current()
+        if USE_FIGPREF: figpref.current()
         if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
         if type(fld) == str:
@@ -335,7 +339,7 @@ class Grid(object):
 
     def contour(self,fld, *args, **kwargs):
         """Make a pcolor-plot of field"""
-        figpref.current()
+        if USE_FIGPREF: figpref.current()
         if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
         if type(fld) == str:
