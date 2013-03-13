@@ -13,8 +13,7 @@ class Rutgers(base.Grid):
     """ Baseclass for all rutgers projects """
     def __init__(self, **kwargs):
         super(Rutgers, self).__init__(**kwargs)
-        self.add_mp()
-
+        
     def add_landmask(self):
         """ Add a landmask attribute """
         g = netcdf_file(self.gridfile)

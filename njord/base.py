@@ -318,11 +318,19 @@ class Grid(object):
         for v in self.__dict__.keys():
             self.__dict__[v] = dmpfile[v]
 
+
     def add_mp(self, map_region=None):
-        """ Add a projmap instance as defined in the config file"""
-        if map_region is not None:
-            self.map_region = map_region
-        self.mp = projmap.Projmap(self.map_region)
+        """Old method, don't use!"""
+        return
+
+    @property
+    def mp(self):
+        """Return a projmap instance as defined by self.map_region"""
+        if not 'mp' in self.__dict__.keys():
+            self.__dict__['mp'] = projmap.Projmap(self.map_region)
+        if self.__dict__['mp'].region != self.map_region:
+            self.__dict__['mp'] = projmap.Projmap(self.map_region)
+        return self.__dict__['mp']
 
     def pcolor(self,fld, **kwargs):
         """Make a pcolor-plot of field"""
