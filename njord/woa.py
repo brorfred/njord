@@ -8,6 +8,7 @@ import matplotlib.cm as cm
 from scipy.io import netcdf_file, netcdf_variable
 
 import base
+import gmtgrid
 
 class Woa09(base.Grid):
     """Setup World Ocean Atlas instance"""
@@ -21,9 +22,10 @@ class Woa09(base.Grid):
         """Setup necessary variables for grid """
         g = netcdf_file("%s_%s.nc" % (self.gridfile,self.res), 'r')
         self.lat = g.variables['lat'][:]
-        self.lon = g.variables['lon'][:]
+        self.gmt = gmtgrid.Shift(g.variables['lon'][:].copy())
+        self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
-        self.depth = g.variables['depth'][:]
+        #self.depth = g.variables['depth'][:]
 
     def load(self,fldname ): #,jd=731583,yr=0,mn=1,dy=1,hr=3):
         """ Load climatological fields"""
@@ -32,7 +34,7 @@ class Woa09(base.Grid):
         nc = netcdf_file("%s/%s" % (self.datadir, filename))     
         fld =  np.squeeze(nc.variables[self.vdict[fldname][1]][:]).copy()
         fld[fld>9999] = np.nan
-        self.__dict__[fldname] = fld
+        self.__dict__[fldname] = self.gmt.field(fld)
 
 
     def add_vdict(self):
