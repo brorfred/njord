@@ -176,13 +176,17 @@ class Grid(object):
         elif not hasattr(self, 'kd'):
             self.add_kd()
         dist,ij = self.kd.query(list(np.vstack((lon,lat)).T), nei)
-        if cutoff is not None:
-            ij[dist>cutoff] = 0
+        #if cutoff is not None:
+        #    ij[dist>cutoff] = 0
         if nei == 1 :
-            return self.kdijvec[ij[:] - 1][:, 0], self.kdijvec[ij[:]-1][:, 1]
+            ivec = self.kdijvec[ij[:] - 1][:, 0]
+            jvec = self.kdijvec[ij[:] - 1][:, 1]
+            ivec[dist>cutoff] = np.nan
+            jvec[dist>cutoff] = np.nan
         else:
-            return (np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0],
-                    np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1])
+            ivec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0]
+            jvec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1]
+        return ivec,jvec
 
     def fld2vec(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
                 cutoff=None, nei=1):

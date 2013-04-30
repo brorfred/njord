@@ -1,27 +1,48 @@
 import os
 import glob 
-from datetime import datetime as dtm
 
 import numpy as np
 import pylab as pl
+from scipy.io import netcdf_file
 import random
 from matplotlib.mlab import griddata
 import matplotlib.cm as cm
-
-import pycdf
 
 import grid
 import bln
 from pysea import sw, wind2pv
 from reuerflux import pv2fl, pv2wpv
 import gmtgrid
-cnv = gmtgrid.convert
 
-import projmaps
+import base
 
 def nodimb(a,b): return (a-b) / b
 
 c2o2 =170./117
+
+class Base(base.Grid):
+
+    def __init__(self, **kwargs):
+        super(Base, self).__init__(**kwargs)
+        self.add_mp()
+        
+    def setup_grid(self):
+        """Setup necessary variables for grid """
+        g = netcdf_file(self.gridfile, 'r')
+        self.llat = g.variables['TLAT'][:]
+        self.gmt  = gmtgrid.Shift(g.variables['TLONG'][0,:].copy())
+        self.lon  = self.gmt.lonvec
+        self.llon = g.variables['TLONG'][:].copy()
+        self.llon[self.llon>180] = self.llon[self.llon>180]-360
+        self.llon = self.gmt.field(self.llon)       
+        #self.zlev = g.variables['z_t'][:]
+        #self.zlev = g.variables['HT'][:]
+            
+    def add_landmask(self):
+        """ Generate a landmask for t-positions"""
+        self.landmask = np.isnan(self.llat)
+
+        
 class csm:
     def __init__(self, fname='BEC.gx3.22.pi.cv2.Ar.daily.2004-02.nc',
                  datadir='/projData/CSMBGC/Ar_daily/',
@@ -321,8 +342,8 @@ class csm:
         self.vd = vardict
 
     def create_tvec(self,lnmsk='',dtmsk=''):
-        self.tvec = np.arange(pl.date2num(dtm(2003,1,1)),
-                         pl.date2num(dtm(2006,12,31)))
+        self.tvec = np.arange(pl.datestr2num('2003-01-01'),
+                              pl.datestr2num('2006-12-31'))
         self.tvec = self.tvec[self.t1:self.t2]
 
     def create_months(self):

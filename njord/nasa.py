@@ -116,7 +116,7 @@ class MODIS(base.Grid):
                    'chl': ['CHL_chlor_a','km',0.001,200],
                    'poc': ['POC_poc','km',0,10000],
                    'bbp': ['GIOP01_bbp_443_giop','km',0],
-                   'sst': ['SST','',-10,45],
+                   'sst': ['SST','',-2,45],
                    'par': ['PAR_par','km',-5,200],
                    'flh': ['FLH_nflh','km',0],
                    'ipar': ['FLH_ipar','km',0],
@@ -158,8 +158,8 @@ class MODIS(base.Grid):
             self.__dict__[fld] = base**((slope * l3m_data) + intercept)
         else:
             self.__dict__[fld] = ((slope * l3m_data) + intercept)
-        mask = ((self.__dict__[fld] < self.vc[fld][2]) |
-                (self.__dict__[fld] > self.vc[fld][3]))
+        mask = ((self.__dict__[fld] < self.minval) |
+                (self.__dict__[fld] > self.maxval))
         if nan=="nan":
             self.__dict__[fld][mask] = np.nan
         self._try_to_zip(zipped)
@@ -175,11 +175,23 @@ class MODIS(base.Grid):
         field     = ds[self.j1:self.j2, self.i1:self.i2].copy()
         intercept = ds.attributes()['Intercept']
         slope     = ds.attributes()['Slope']
-        nanval    = ds.attributes()['Fill']
+        try:
+            nanval = ds.attributes()['Fill']
+        except:
+            nanval = 65535
         try:
             base  = ds.attributes()['Base']
         except KeyError:
             base = -999
+        if 'Scaled Data Maximum' in sd.attributes().keys():
+            self.maxval = sd.attributes()['Scaled Data Maximum']
+            self.minval = sd.attributes()['Scaled Data Minimum']
+        elif 'Suggested Image Scaling Maximum' in sd.attributes().keys():
+            self.maxval = sd.attributes()['Suggested Image Scaling Maximum']
+            self.minval = sd.attributes()['Suggested Image Scaling Minimum']
+        else:
+            self.minval = self.vc[fld][2]
+            self.maxval = self.vc[fld][3]
         start_iso = (pl.date2num(dtm(
                         sd.attributes()['Period Start Year'],1,1)) + 
                         sd.attributes()['Period Start Day'] - 1)
@@ -205,6 +217,8 @@ class MODIS(base.Grid):
         mask = ((jvec>=0) & (jvec<=(self.j2-self.j1)) &
                 (ivec>=0) & (ivec <= (self.i2-self.i1)))
         l3m_data[jvec[mask],ivec[mask]] = dvec[mask]
+        self.minval = self.vc[fld][2]
+        self.maxval = self.vc[fld][3]
         return l3m_data,base,intercept,slope
 
     def _l3write_npz(self, dvec, ivec ,jvec, base, intercept, slope):
@@ -235,7 +249,7 @@ class MODIS(base.Grid):
         if zipped:
             err = sbp.call(["pbzip2", self.filename])
             if err ==1 :
-                raise IOerror( "Compression of " + self.filename + " failed.")
+                raise IOError( "Compression of " + self.filename + " failed.")
 
     def histmoller(self, fieldname, jd1, jd2, y1, y2,
                    mask=[], bins=100, logy=True):

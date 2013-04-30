@@ -3,7 +3,7 @@ setup.py
 njord/__init__.py
 njord/base.py
 njord/bem.py
-njord/bgccsm.py
+njord/cesm.py
 njord/ecco.py
 njord/gmtgrid.py
 njord/gompom.py
