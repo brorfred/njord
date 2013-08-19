@@ -21,8 +21,9 @@ class Grid(object):
     """Base class of njord for lat-lon gridded 2D or 3D data """
     def __init__(self, **kwargs):
         """Initalize an instance based on a config file"""
-        self.projname = "%s.%s" % (self.__module__.split(".")[-1],
-                                   type(self).__name__)
+        if not hasattr(self, 'projname'):
+            self.projname = "%s.%s" % (self.__module__.split(".")[-1],
+                                       type(self).__name__)
         self.basedir =  os.path.dirname(os.path.abspath(__file__))
         self.inkwargs = kwargs
         self._load_presets('njord',kwargs)
@@ -43,8 +44,9 @@ class Grid(object):
                 self.config_file = fnm
                 break
         else:
-            raise NameError('Project not included in config files')
-
+            raise NameError('Could not find a config file')
+        
+        
         def splitkey(key, val):
             if key in self.inkwargs.keys():
                 self.__dict__[key] = self.inkwargs[key]
@@ -112,6 +114,12 @@ class Grid(object):
                 self.jd = self.defaultjd
             else:
                 raise KeyError, "Time parameter missing"
+        if hasattr(self,'hourlist'):
+            dd = self.jd-int(self.jd)
+            ddlist = np.array(self.hourlist).astype(float)/24
+            ddpos = np.argmin(np.abs(ddlist-dd))
+            self.jd = int(self.jd) + ddlist[ddpos]
+            
         self._jd_to_dtm()
 
     def _jd_to_dtm(self):
@@ -120,6 +128,17 @@ class Grid(object):
             self.__dict__[jdpar] = int(pl.num2date(self.jd).strftime(dtpar))
         self.yd = self.jd - pl.date2num(dtm(self.yr,1,1)) + 1
 
+    def _calcload(self, fldname, **kwargs):
+        if fldname == "uv":
+            self.load('u', **kwargs)
+            self.load('v', **kwargs)
+            km,jm,im = np.minimum(self.u.shape, self.v.shape)
+            self.uv = np.sqrt(self.u[:km, :jm, :im]**2 + 
+                              self.v[:km, :jm, :im]**2)/2
+            return True
+        else:
+            return False
+        
     def add_ij(self):
         self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
                                           np.arange(self.j2-self.j1))
@@ -181,8 +200,9 @@ class Grid(object):
         if nei == 1 :
             ivec = self.kdijvec[ij[:] - 1][:, 0]
             jvec = self.kdijvec[ij[:] - 1][:, 1]
-            ivec[dist>cutoff] = np.nan
-            jvec[dist>cutoff] = np.nan
+            if cutoff is not None:
+                ivec[dist>cutoff] = -999
+                jvec[dist>cutoff] = -999
         else:
             ivec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0]
             jvec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1]
@@ -328,10 +348,10 @@ class Grid(object):
         return
 
     @property
-    def mp(self):
+    def mp(self, **kwargs):
         """Return a projmap instance as defined by self.map_region"""
         if not 'mp' in self.__dict__.keys():
-            self.__dict__['mp'] = projmap.Projmap(self.map_region)
+            self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
         if self.__dict__['mp'].region != self.map_region:
             self.__dict__['mp'] = projmap.Projmap(self.map_region)
         return self.__dict__['mp']
