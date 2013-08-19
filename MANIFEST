@@ -15,7 +15,6 @@ njord/ncep.py
 njord/njord.cfg
 njord/njordstatus
 njord/oscar.py
-njord/parse.py
 njord/poseidon.py
 njord/rutgers.py
 njord/test.py
