@@ -10,7 +10,7 @@ from scipy.io import netcdf_file
 import base
 import gmtgrid
 import reuerflux
-import bln
+#import bln
 
 
 class Winds(object):
