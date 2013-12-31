@@ -222,12 +222,12 @@ class MODIS(base.Grid):
     def _try_to_unzip(self, zipfname):
         """Unzip file if exists and and is a valid bzip2 file"""
         if not os.path.isfile(self.filename):
-            err = sbp.call(["pbzip2", "-d", zipfname])
+            err = sbp.call(["bzip2", "-d", zipfname])
             if err == 1:
                 print "Decompression of " + zipfname + " failed."
                 print "Trying to download again"
                 self.download(self.filename)
-                err = sbp.call(["pbzip2", "-d", zipfname])
+                err = sbp.call(["bzip2", "-d", zipfname])
                 if err == 1:
                     raise IOError, "Download file failed."
             return True
@@ -236,7 +236,7 @@ class MODIS(base.Grid):
 
     def _try_to_zip(self, zipped):
         if zipped:
-            err = sbp.call(["pbzip2", self.filename])
+            err = sbp.call(["bzip2", self.filename])
             if err ==1 :
                 raise IOError( "Compression of " + self.filename + " failed.")
 
