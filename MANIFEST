@@ -10,15 +10,16 @@ njord/gompom.py
 njord/jpl.py
 njord/llinterp.py
 njord/mldclim.py
+njord/myocean.py
 njord/nasa.py
 njord/ncep.py
 njord/njord.cfg
 njord/njordstatus
 njord/oscar.py
-njord/parse.py
 njord/poseidon.py
 njord/rutgers.py
 njord/test.py
 njord/topaz.py
 njord/winds.py
 njord/woa.py
+njord/yrday.py

@@ -10,7 +10,7 @@ from scipy.io import netcdf_file
 import base
 import gmtgrid
 import reuerflux
-import bln
+#import bln
 
 
 class Winds(object):
@@ -166,13 +166,15 @@ class CORE2:
     def __init__(self,datadir = "/projData/CORE2/"):
         self.jdbase = pl.date2num(dtm(1948,1,1))+15
         self.datadir = datadir
+        filename = "u_10.2005.05APR2010.nc"
         try:
-            n = pycdf.CDF(datadir + "u_10.2005.05APR2010.nc")
+            n = netcdf_file(datadir + filename)
         except:
             print 'Error opening the gridfile %s' % datadir + filename
             raise
-        self.lat = n.var('LAT')[:]
-        self.lon,self.gr = gmtgrid.config(n.var('LON')[:],dim=0)
+        self.lat = n.variables['LAT'][:]
+        self.gmt = gmtgrid.Shift(n.variables['LON'][:].copy())
+        self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         n.close()
 	
@@ -182,12 +184,12 @@ class CORE2:
         dy = pl.num2date(jd1).day
         filesuff = ".%04i.05APR2010.nc" %(yr)
         try:
-            nu = pycdf.CDF(self.datadir + "u_10" + filesuff)
-            nv = pycdf.CDF(self.datadir + "v_10" + filesuff)
+            nu = netcdf_file(self.datadir + "u_10" + filesuff)
+            nv = netcdf_file(self.datadir + "v_10" + filesuff)
         except:
-            print 'Error opening the windfile %s' % datadir + "*" + filesuff
+            print 'Error opening the windfile %s%s' % (self.datadir,filesuff)
             raise
-        jdvec = nu.var('TIME')[:] + self.jdbase
+        jdvec = nu.variables['TIME'][:] + self.jdbase
         t1 = int(np.nonzero(jdvec>jd1)[0].min())
         if not jd2:
             jd2 = jd1+1
@@ -206,9 +208,9 @@ class CORE2:
             return
         djd = np.ceil(jd2 - jd1)
         wndjd = np.zeros( ( (djd,) + self.llon.shape) ) 
-        u = nu.var('U_10_MOD')[t1:t2,...]
-        v = nv.var('V_10_MOD')[t1:t2,...]
-        nwnd = gmtgrid.convert(np.sqrt(u**2 + v**2), self.gr)
+        u = self.gmt.field(nu.variables['U_10_MOD'][t1:t2,...].copy())
+        v = self.gmt.field(nv.variables['V_10_MOD'][t1:t2,...].copy())
+        nwnd = np.sqrt(u**2 + v**2)
         for t in np.arange(0,djd*4,4):
             wndjd[t/4,...] = np.mean(nwnd[t:t+4,...],axis=0)
 

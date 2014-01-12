@@ -11,8 +11,7 @@ import matplotlib as mpl
 from matplotlib.mlab import griddata
 import matplotlib.cm as cm
 from scipy.stats import nanmean
-
-import pycdf
+from scipy.io import netcdf_file
 
 import base
 import gmtgrid
@@ -39,21 +38,21 @@ class Tpz(base.Grid):
 
     def setup_grid(self):
         """Setup necessary variables for grid """
-        g = pycdf.CDF(self.gridfile)
+        g = netcdf_file(self.gridfile)
 
-        self.gmt = gmtgrid.Shift(g.var('gridlon_t')[:])
+        self.gmt = gmtgrid.Shift(g.variable('gridlon_t')[:])
         self.lon = (self.gmt.lonvec).astype(np.float32)
-        self.lat   = g.var('gridlat_t')[:]
-        self.depth = self.gmt.field(g.var('depth_t')[:])
-        self.dxt   = self.gmt.field(g.var('dxt')[:])
-        self.dyt   = self.gmt.field(g.var('dyt')[:])
-        self.dxu   = self.gmt.field(g.var('dxu')[:])
-        self.dyu   = self.gmt.field(g.var('dyu')[:])
-        self.dzt   = self.gmt.field(g.var('dz_t')[:])
-        self.zlev  = self.gmt.field(g.var('dz_t')[:])
+        self.lat   = g.variable('gridlat_t')[:]
+        self.depth = self.gmt.field(g.variable('depth_t')[:])
+        self.dxt   = self.gmt.field(g.variable('dxt')[:])
+        self.dyt   = self.gmt.field(g.variable('dyt')[:])
+        self.dxu   = self.gmt.field(g.variable('dxu')[:])
+        self.dyu   = self.gmt.field(g.variable('dyu')[:])
+        self.dzt   = self.gmt.field(g.variable('dz_t')[:])
+        self.zlev  = self.gmt.field(g.variable('dz_t')[:])
         if not hasattr(self, 'k1'): self.k1 = 0
         if not hasattr(self, 'k2'): self.k2 = len(self.zlev)
-        self.dz    =  g.var('dz_t')[self.k1:self.k2,25,30]
+        self.dz    =  g.variable('dz_t')[self.k1:self.k2,25,30]
         self.vol = ( self.dxt[np.newaxis,...] * 
                      self.dyt[np.newaxis,...]*self.dzt)
         self.vol[self.vol<0] = np.nan

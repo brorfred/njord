@@ -67,7 +67,8 @@ class MODIS(base.Grid):
             yd2 = np.arange(8,370,8)
             yd2[-1] = ydmax
             pos = np.nonzero(self.yd >= yd1)[0].max()
-            datestr = "%i%03i%i%03i" % (self.yr, yd1[pos], self.yr, yd2[pos])
+            datestr = ("%i%03i%i%03i" % 
+                       (self.yr, yd1[pos], self.yr, yd2[pos]))
         elif fldtype == "CU":
             datestr = "20021852011365"
         else:
@@ -134,7 +135,8 @@ class MODIS(base.Grid):
             zipped = False
         else:
             zipfname = self.filename + '.bz2'
-            if not (os.path.isfile(self.filename) | os.path.isfile(zipfname)):
+            if not (os.path.isfile(self.filename) | 
+                    os.path.isfile(zipfname)):
                 print "File missing, downloading from GSFC"
                 self.download(self.filename)
             zipped = self._try_to_unzip(zipfname)
@@ -153,8 +155,8 @@ class MODIS(base.Grid):
         if ((not os.path.isfile(self.filename + '.npz')) &
             ((self.llat.shape) == (self.jmt,self.imt))):
             self.add_ij()
-            self._l3write_npz(l3m_data[~mask], self.imat[~mask] ,self.jmat[~mask],
-                              base, intercept, slope)      
+            self._l3write_npz(l3m_data[~mask], self.imat[~mask],
+                              self.jmat[~mask], base, intercept, slope)
 
     def _l3read_hdf(self, fieldname='l3m_data'):
         sd = SD(self.filename, SDC.READ)
@@ -220,12 +222,12 @@ class MODIS(base.Grid):
     def _try_to_unzip(self, zipfname):
         """Unzip file if exists and and is a valid bzip2 file"""
         if not os.path.isfile(self.filename):
-            err = sbp.call(["pbzip2", "-d", zipfname])
+            err = sbp.call(["bzip2", "-d", zipfname])
             if err == 1:
                 print "Decompression of " + zipfname + " failed."
                 print "Trying to download again"
                 self.download(self.filename)
-                err = sbp.call(["pbzip2", "-d", zipfname])
+                err = sbp.call(["bzip2", "-d", zipfname])
                 if err == 1:
                     raise IOError, "Download file failed."
             return True
@@ -234,7 +236,7 @@ class MODIS(base.Grid):
 
     def _try_to_zip(self, zipped):
         if zipped:
-            err = sbp.call(["pbzip2", self.filename])
+            err = sbp.call(["bzip2", self.filename])
             if err ==1 :
                 raise IOError( "Compression of " + self.filename + " failed.")
 

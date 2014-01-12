@@ -57,7 +57,7 @@ class NOW(base.Grid):
         """Setup necessary variables for grid """
         g = netcdf_file(self.gridfile, 'r')
         self.llat = g.variables['lat_rho'][:]
-        self.llon = g.variables['lon_rho'][:]-360
+        self.llon = g.variables['lon_rho'][:]
         self.depth = g.variables['h'][:]
         self.Cs_r = np.array([-0.882485522505154, -0.778777844867132,
                               -0.687254423585503, -0.606483342183883,
@@ -80,20 +80,14 @@ class NOW(base.Grid):
                               -0.00517297115481568, -0.0034043313603439,
                               -0.00168895354075999, 0.])
 
-    def load(self,fldname,jd=0,yr=0,mn=1,dy=1,hr=3):
+    def load(self,fldname, **kwargs):
         """ Load Cali Current fields for a given day"""
+        if self._calcload(fldname, **kwargs): return
+        self._timeparams(**kwargs)
+        
         i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
-        if jd!=0:
-            yr = pl.num2date(jd).year
-            mn = pl.num2date(jd).month
-            dy = pl.num2date(jd).day
-            hr = pl.num2date(jd+0.125).hour
-            mi = pl.num2date(jd).minute
-            se = pl.num2date(jd).second      
-        elif yr!=0:
-            jd = pl.date2num(dtm(yr,mn,dy,hr))
-        yd = jd - pl.date2num(dtm(yr,1,1)) + 1
-        filename = "/%04i%02i%02i%02i_da.nc" % (yr,mn,dy,hr)
+        filename = ("/%04i%02i%02i%02i_da.nc" % 
+                    (self.yr,self.mn,self.dy,self.hr) )
         print self.datadir + filename
         nc = netcdf_file(self.datadir + filename)        
         fld =  np.squeeze(nc.variables[fldname][:]).copy()
@@ -104,5 +98,5 @@ class NOW(base.Grid):
                      self.Cs_r[:,np.newaxis,np.newaxis])
         
     def add_landmask(self):
-        g = netcdf_file(self.datadir + '/scb_grid.nc')
-        self.landmask = g.variables['mask_rho'][:]
+        """ Generate a landmask for t-positions"""
+        self.landmask = self.depth < 10.0000000001

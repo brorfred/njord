@@ -7,6 +7,7 @@ class Shift:
     def __init__(self, lonvec, idim=1):
         """Find the new centerpoint and adjust the lon vector""" 
         lonvec[lonvec>180] = lonvec[lonvec>180]-360
+        lonvec[lonvec<-180] = lonvec[lonvec<-180]+360
         try:
             gr = np.nonzero( (lonvec[1:]-lonvec[:-1]) < 0)[0].item() + 1
         except ValueError:

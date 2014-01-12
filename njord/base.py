@@ -45,7 +45,8 @@ class Grid(object):
                 break
         else:
             raise NameError('Project not included in config files')
-
+        
+        
         def splitkey(key, val):
             if key in self.inkwargs.keys():
                 self.__dict__[key] = self.inkwargs[key]
@@ -113,6 +114,12 @@ class Grid(object):
                 self.jd = self.defaultjd
             else:
                 raise KeyError, "Time parameter missing"
+        if hasattr(self,'hourlist'):
+            dd = self.jd-int(self.jd)
+            ddlist = np.array(self.hourlist).astype(float)/24
+            ddpos = np.argmin(np.abs(ddlist-dd))
+            self.jd = int(self.jd) + ddlist[ddpos]
+            
         self._jd_to_dtm()
 
     def _jd_to_dtm(self):
@@ -121,6 +128,17 @@ class Grid(object):
             self.__dict__[jdpar] = int(pl.num2date(self.jd).strftime(dtpar))
         self.yd = self.jd - pl.date2num(dtm(self.yr,1,1)) + 1
 
+    def _calcload(self, fldname, **kwargs):
+        if fldname == "uv":
+            self.load('u', **kwargs)
+            self.load('v', **kwargs)
+            km,jm,im = np.minimum(self.u.shape, self.v.shape)
+            self.uv = np.sqrt(self.u[:km, :jm, :im]**2 + 
+                              self.v[:km, :jm, :im]**2)/2
+            return True
+        else:
+            return False
+        
     def add_ij(self):
         self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
                                           np.arange(self.j2-self.j1))
@@ -169,7 +187,8 @@ class Grid(object):
             print fldvec[dpos]
         return fldvec
         
-    def ll2ij(self, lon, lat, mask=None, cutoff=None, nei=1):
+    def ll2ij(self, lon, lat, mask=None, cutoff=None, nei=1, all_nei=False,
+              return_dist=False):
         """Reproject a lat-lon vector to i-j grid coordinates"""
         self.add_ij()
         if mask is not None:
@@ -185,13 +204,20 @@ class Grid(object):
             if cutoff is not None:
                 ivec[dist>cutoff] = -999
                 jvec[dist>cutoff] = -999
-        else:
+        elif all_nei == False:
             ivec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0]
             jvec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1]
-        return ivec,jvec
+            dist = np.squeeze(dist[:, nei-1])
+        else:
+            ivec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, :, 0]
+            jvec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, :, 1]
+        if return_dist == True:
+            return ivec,jvec,dist
+        else:
+            return ivec,jvec
 
     def fld2vec(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
-                cutoff=None, nei=1):
+                daysback=1, cutoff=None, nei=1):
         """Get data from the lat-lon-jd positions """
         if maskvec is not None:
             lonvec = lonvec[maskvec]
@@ -199,14 +225,19 @@ class Grid(object):
             jdvec  = jdvec[maskvec]
         intjdvec  = ((jdvec / djd).astype(np.int)) * djd
         ivec,jvec = self.ll2ij(lonvec, latvec)#, cutoff, nei) 
-        fldvec    = jdvec * np.nan
-        for n,jd in enumerate(np.unique(intjdvec)):
-            print intjdvec.max() - jd
-            mask = intjdvec == jd
-            fld = self.get_field(fldname, jd=jd)
-            #fldvec[mask] = fld[jvec[mask], ivec[mask]]
-            fldvec[mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
-        return fldvec
+        fldvec    = np.zeros((daysback, len(latvec))) * np.nan
+        for days in np.arange(daysback):
+            for n,jd in enumerate(np.unique(intjdvec)):
+                print intjdvec.max() - jd
+                mask = intjdvec == jd
+                try:
+                    fld = self.get_field(fldname, jd=jd)
+                except IOError:
+                    print "No file found"
+                    continue
+                fldvec[days, mask] = fld[jvec[mask], ivec[mask]]
+                #fldvec[days, mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
+        return np.squeeze(fldvec)
             
     def add_ij2ij(self, njord_obj):
         sci,scj = njord_obj.ll2ij(np.ravel(self.llon),np.ravel(self.llat))
@@ -310,7 +341,7 @@ class Grid(object):
         hiS.hist = hsmat
         hiS.norm = (hsmat.astype(float) / hsmat.max(axis=0))
         self.__dict__[fieldname + "_hiS"] = hiS
-
+        
     def dump(self, filename=None):
         """Dump all attributes in instance to a file"""
         dmp_dct = {}
@@ -330,10 +361,10 @@ class Grid(object):
         return
 
     @property
-    def mp(self):
+    def mp(self, **kwargs):
         """Return a projmap instance as defined by self.map_region"""
         if not 'mp' in self.__dict__.keys():
-            self.__dict__['mp'] = projmap.Projmap(self.map_region)
+            self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
         if self.__dict__['mp'].region != self.map_region:
             self.__dict__['mp'] = projmap.Projmap(self.map_region)
         return self.__dict__['mp']

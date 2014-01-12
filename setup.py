@@ -8,7 +8,7 @@ usage:    python setup.py sdist
 from distutils.core import setup
 
 setup(name = 'njord',
-      version = '0.5',
+      version = '0.5.9.1',
       description = 'Package to simplify working with gridded data',
       long_description = "README.md",
       #long_description=open('docs/README.rst', 'rt').read()

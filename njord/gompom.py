@@ -2,31 +2,27 @@ import glob
 from datetime import datetime as dtm
 
 import numpy as np
+from scipy.io import netcdf_file
 
-import pycdf
 from pyhdf.SD import SD,SDC
 
-from njord import Njord
+import base
 
-class Casco(njord):
+class Casco(base.Grid):
 
-    def __init__(self, datadir="/projData/casco/gompom",ijarea=[],
-                 lat1=None,lat2=None,lon1=None,lon2=None):
-        self.i1 = 0
-        self.i2 = 285
-        self.j1 = 0
-        self.j2 = 274
-        self.datadir = datadir
-        gc = pycdf.CDF(self.datadir + '/grid.cdf')
-        self.llat = gc.var('y')[self.i1:self.i2]
-        self.llon = gc.var('x')[self.j1:self.j2]
-        self.imt = 285
-        self.jmt = 274
-        self.region = "casco"
-
+    def __init__(self, **kwargs):
+        super(Casco, self).__init__()
+        self.add_mp()
         self.missing = {'temp':-25184,'salt':-26128,'elev':16608,
                         'u':512,'v':512}
 
+    def setup_grid(self):
+        gc = netcdf_file(self.gridfile)
+        self.llat = gc.variables['y'][:]
+        self.llon = gc.variables['x'][:]
+        self.depth = gc.variables['depth'][:].copy()
+        self.depth[self.depth<0] = np.nan
+        
     def load(self,field,jd=0,yr=0,mn=1,dy=1):
         """ Load casco fields for a given day"""
         self.last_loaded_feld = field
@@ -42,7 +38,7 @@ class Casco(njord):
             md  = jd - pl.date2num(dtm(1992,10,05))
         filename ="/casco.%04i%02i%02i.cdf" % (yr,mn,dy)
         print filename
-        nc = pycdf.CDF(self.datadir + filename)        
+        nc = netcdf_file(self.datadir + filename)        
 
         if field == 'uv':
             self.load('u',jd,yr,mn,dy)
@@ -52,7 +48,7 @@ class Casco(njord):
             self.v = (-self.u * np.sin(ang) + self.v * np.cos(ang) )
             self.u = uu
         else:
-            var = nc.var(field)
+            var = nc.variables[field][:]
             fld = (var[t,i1:i2,j1:j2]).astype(np.float)
             fld[fld==self.missing[field]] = np.nan
             self.__dict__[field] = (fld *
@@ -134,7 +130,7 @@ class Casco(njord):
 
     
 
-class Sat(Njord):
+class Sat(base.Grid):
     def __init__(self,res='250m',box=8):
         if res=='250m':
             self.satdir="/projData/casco/modis/remaps_250/box%i/" % box
@@ -210,11 +206,16 @@ def satmaps(res='500m',box=8, field="chlor_a"):
         pl.savefig("/Users/bror/casfigs/cas_%03i.png" % n, dpi=100)
 
 
-class GOM(Njord):
+class GOM(base.Grid):
 
-    def __init__(self):
-        n = pycdf.CDF(griddir + 'grid.cdf')
-        self.llon = n.var('x')[:]
-        self.llat = n.var('y')[:]
-        self.base_iso = pl.date2num(dtm(2004,1,1))
-
+    def __init__(self, **kwargs):
+        super(GOM, self).__init__()
+        self.add_mp()
+        
+    def setup_grid(self):
+        gc = netcdf_file(self.gridfile)
+        print self.gridfile
+        self.llat  = gc.variables['y'][:]
+        self.llon  = gc.variables['x'][:]
+        self.depth = gc.variables['depth'][:].copy()
+        self.depth[self.depth<0] = np.nan
