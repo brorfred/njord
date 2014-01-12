@@ -12,15 +12,14 @@ from pyhdf.SD import SD, SDC
 import base
 import yrday
 
-class MODIS(base.Grid):
+class Base(base.Grid):
 
-    def __init__(self, res="9km", **kwargs):
-        self.res = res
-        super(MODIS, self).__init__(**kwargs)
+    def __init__(self, **kwargs):
+        super(Base, self).__init__(**kwargs)
         self.lat = self.llat[:,0]
         self.lon = self.llon[0,:]
         self.add_vc()
-        self.datadir = self.datadir + '/A' + self.res + '/' 
+        self.datadir = '%s/%s%s/' % (self.datadir, self.fp, self.res) 
         
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
@@ -73,10 +72,10 @@ class MODIS(base.Grid):
             datestr = "20021852011365"
         else:
             print "Field type not included"
-        self.filename = ("A%s.L3m_%s_%s_%s%s" % (datestr, fldtype,
-                                            self.vc[fld][0],
-                                            self.res[0],
-                                            self.vc[fld][1]))
+        self.filename = ("%s%s.L3m_%s_%s_%s%s" % (self.fp, datestr, fldtype,
+												  self.vc[fld][0],
+												  self.res[0],
+												  self.vc[fld][1]))
         self._l3read(fld,nan=nan)
         
     def add_landmask(self):
@@ -91,7 +90,7 @@ class MODIS(base.Grid):
         datelist = []
         for line in urllib.urlopen(url):
             if "cgi/getfile" in line:
-                datelist.append(re.findall(r'getfile/A([^E]+).L3m',
+                datelist.append(re.findall(r'getfile/%s([^E]+).L3m' % self.fp,
                                            line)[0][:14])
         self.mc_datedict = {}
         for dstr in datelist[1:]:
@@ -240,34 +239,27 @@ class MODIS(base.Grid):
             if err ==1 :
                 raise IOError( "Compression of " + self.filename + " failed.")
 
-    def histmoller(self, fieldname, jd1, jd2, y1, y2,
-                   mask=[], bins=100, logy=True):
-        if len(mask)==0: mask = (self.lat !=-800)
-        if logy:
-            vlist = np.exp(np.linspace(np.log(y1), np.log(y2), bins+1))
-        else:
-            vlist = np.linspace(y1, y2, bins+1)
-        hsmat = np.zeros((jd2-jd1+1,bins), dtype=np.int)
-        tvec = np.arange(jd1,jd2+1)
-        for n_t,jd in enumerate(tvec):
-            print pl.num2date(jd)
-            self.load(fieldname, jd=jd)
-            field = self.__dict__[fieldname]
-            field[~mask] = np.nan
-            hsmat[n_t,:],_ = np.histogram(field[~np.isnan(field)], vlist)
 
-        class hiS: pass
-        hiS.tvec = tvec
-        hiS.vlist = vlist
-        hiS.hist = hsmat
-        hiS.norm = (hsmat.astype(float) / hsmat.max(axis=0))
-        self.__dict__[fieldname + "_hiS"] = hiS
+
+
+class MODIS(Base):
+    def __init__(self, res="9km", **kwargs):
+        self.res = res        
+        self.fp = "A"
+        super(MODIS, self).__init__(**kwargs)
+
+class SeaWIFS(Base):
+    def __init__(self, res="9km", **kwargs):
+        self.res = res        
+        self.fp = "S"
+        super(SeaWIFS, self).__init__(**kwargs)
 
 
 
 
 
 
+            
 def mission_min():
         i1 = 0
         i2 = None

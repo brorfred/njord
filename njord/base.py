@@ -217,14 +217,14 @@ class Grid(object):
             return ivec,jvec
 
     def fld2vec(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
-                daysback=1, cutoff=None, nei=1):
+                daysback=1, nei=1,all_nei=True):
         """Get data from the lat-lon-jd positions """
         if maskvec is not None:
             lonvec = lonvec[maskvec]
             latvec = latvec[maskvec]
             jdvec  = jdvec[maskvec]
+        ivec,jvec = self.ll2ij(lonvec, latvec, nei=nei, all_nei=all_nei) 
         intjdvec  = ((jdvec / djd).astype(np.int)) * djd
-        ivec,jvec = self.ll2ij(lonvec, latvec)#, cutoff, nei) 
         fldvec    = np.zeros((daysback, len(latvec))) * np.nan
         for days in np.arange(daysback):
             for n,jd in enumerate(np.unique(intjdvec)):
@@ -235,8 +235,11 @@ class Grid(object):
                 except IOError:
                     print "No file found"
                     continue
-                fldvec[days, mask] = fld[jvec[mask], ivec[mask]]
                 #fldvec[days, mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
+                if ivec.ndim == 2:
+                    fldvec[days, mask] = np.nanmean(fld[jvec, ivec], axis=1)[mask]
+                else:
+                    fldvec[days, mask] = fld[jvec[mask], ivec[mask]]
         return np.squeeze(fldvec)
             
     def add_ij2ij(self, njord_obj):
