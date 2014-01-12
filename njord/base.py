@@ -21,8 +21,9 @@ class Grid(object):
     """Base class of njord for lat-lon gridded 2D or 3D data """
     def __init__(self, **kwargs):
         """Initalize an instance based on a config file"""
-        self.projname = "%s.%s" % (self.__module__.split(".")[-1],
-                                   type(self).__name__)
+        if not hasattr(self, 'projname'):
+            self.projname = "%s.%s" % (self.__module__.split(".")[-1],
+                                       type(self).__name__)
         self.basedir =  os.path.dirname(os.path.abspath(__file__))
         self.inkwargs = kwargs
         self._load_presets('njord',kwargs)
@@ -181,8 +182,9 @@ class Grid(object):
         if nei == 1 :
             ivec = self.kdijvec[ij[:] - 1][:, 0]
             jvec = self.kdijvec[ij[:] - 1][:, 1]
-            ivec[dist>cutoff] = np.nan
-            jvec[dist>cutoff] = np.nan
+            if cutoff is not None:
+                ivec[dist>cutoff] = -999
+                jvec[dist>cutoff] = -999
         else:
             ivec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 0]
             jvec = np.squeeze(self.kdijvec[ij[:,:]-1])[:, nei-1, 1]

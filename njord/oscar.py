@@ -42,8 +42,8 @@ class Oscar(base.Grid):
             nc2 = netcdf_file(self.datadir + filenam2)                    
             t2 = 0
         def readfld(ncvar):
-            return self.gmt.field(ncvar[t1, 0,self.j1:self.j2,
-                                              self.i1:self.i2])  
+            return self.gmt.field(ncvar[t1, 0,:,:])[self.j1:self.j2,
+                                                    self.i1:self.i2]
         u1 = readfld(nc1.variables['u'])
         v1 = readfld(nc1.variables['v'])
         u2 = readfld(nc2.variables['u'])

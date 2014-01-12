@@ -54,20 +54,7 @@ class MODIS(base.Grid):
             self.djd1 = self.jd+1
             self.dmat1 = self.dmat2
             return
-        """
-        if jd != 0:
-            yr = pl.num2date(jd).year
-            yd = jd - pl.date2num(dtm(yr,1,1)) + 1
-            mn = pl.num2date(jd).month
-        elif dy != 0:
-            yd = (pl.date2num(dtm(yr,mn,dy)) -
-                  pl.date2num(dtm(yr,1,1))) + 1
-        elif yd < 1:
-            yr = yr -1
-            ydmax = (pl.date2num(dtm(yr, 12, 31)) -
-                     pl.date2num(dtm(yr,  1,  1))) + 1    
-            yd = ydmax + yd            
-        """
+     
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                  pl.date2num(dtm(self.yr,  1,  1))) + 1    
         if fldtype == "MC":
@@ -207,16 +194,16 @@ class MODIS(base.Grid):
         l3m_data = self.llat * 0 + self.vc[fld][2] - 1
         fH = np.load(self.filename + '.npz')
         dvec      = fH['dvec']
-        ivec      = fH['ivec'] - self.i1
-        jvec      = fH['jvec'] - self.j1
+        ivec      = fH['ivec']
+        jvec      = fH['jvec']
         base      = fH['base']
         intercept = fH['intercept']
         slope     = fH['slope']
         self.jd   = fH['jd']
         self.date = fH['date']
-        mask = ((jvec>=0) & (jvec<=(self.j2-self.j1)) &
-                (ivec>=0) & (ivec <= (self.i2-self.i1)))
-        l3m_data[jvec[mask],ivec[mask]] = dvec[mask]
+        mask = ((jvec>=self.j1) & (jvec<self.j2-1) &
+                (ivec>=self.i1) & (ivec<self.i2-1))
+        l3m_data[jvec[mask]-self.j1, ivec[mask]-self.i1] = dvec[mask]
         self.minval = self.vc[fld][2]
         self.maxval = self.vc[fld][3]
         return l3m_data,base,intercept,slope
