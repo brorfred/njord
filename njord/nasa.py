@@ -12,6 +12,8 @@ from pyhdf.SD import SD, SDC
 import base
 import yrday
 
+ZIPCMD = "pbzip2"
+
 class Base(base.Grid):
 
     def __init__(self, **kwargs):
@@ -20,7 +22,8 @@ class Base(base.Grid):
         self.lon = self.llon[0,:]
         self.add_vc()
         self.datadir = '%s/%s%s/' % (self.datadir, self.fp, self.res) 
-        
+        self.only_npz = kwargs.get('only_npz', False)
+
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
         if self.res == "9km":
@@ -43,6 +46,7 @@ class Base(base.Grid):
         if fld in ["fqy",]:
             pass
         self._timeparams(**kwargs)
+        self.vprint( "load jd=%f and field=%s" % (self.jd, fld))
         if fld == 'Dchl':
             if getattr(self, 'djd1', 0) != self.jd:
                 self.load('chl',fldtype, jd=self.jd)    
@@ -76,6 +80,7 @@ class Base(base.Grid):
 												  self.vc[fld][0],
 												  self.res[0],
 												  self.vc[fld][1]))
+        self.vprint( "Filename is %s" % (self.filename))
         self._l3read(fld,nan=nan)
         
     def add_landmask(self):
@@ -99,17 +104,17 @@ class Base(base.Grid):
         
     def add_vc(self):
         """Add a dict with filename variable components"""
-        self.vc = {'k49': ['KD490_Kd_490','km',0,100],
-                   'chl': ['CHL_chlor_a','km',0.001,200],
-                   'poc': ['POC_poc','km',0,10000],
-                   'bbp': ['GIOP01_bbp_443_giop','km',0],
-                   'sst': ['SST','',-2,45],
-                   'par': ['PAR_par','km',-5,200],
-                   'flh': ['FLH_nflh','km',0],
-                   'ipar': ['FLH_ipar','km',0],
-                   'eup': ['KDLEE_Zeu_lee','km',0],
-                   'eup_lee': ['KDLEE_Zeu_lee','km',0],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km',0]
+        self.vc = {'k49': ['KD490_Kd_490',         'km', 0,      100],
+                   'chl': ['CHL_chlor_a',          'km', 0.001,  200],
+                   'poc': ['POC_poc',              'km', 0,    10000],
+                   'bbp': ['GIOP01_bbp_443_giop',  'km', 0,    10000],
+                   'sst': ['SST',                  '',  -2,       45],
+                   'par': ['PAR_par',              'km',-5,      200],
+                   'flh': ['FLH_nflh',             'km', 0,    10000],
+                   'ipar': ['FLH_ipar',            'km', 0,    10000],
+                   'eup': ['KDLEE_Zeu_lee',        'km', 0,    10000],
+                   'eup_lee': ['KDLEE_Zeu_lee',    'km', 0,    10000],
+                   'eup_mor': ['KDMOREL_Zeu_morel','km', 0,    10000]
                    }
 
     def download(self, filename):
@@ -130,6 +135,7 @@ class Base(base.Grid):
         if not fld: fld = self.filename.rsplit('_')[-2]
 
         if os.path.isfile(self.filename + '.npz'):
+            self.vprint( "Found npz file.")
             l3m_data,base,intercept,slope = self._l3read_npz(fld)
             zipped = False
         else:
@@ -138,6 +144,7 @@ class Base(base.Grid):
                     os.path.isfile(zipfname)):
                 print "File missing, downloading from GSFC"
                 self.download(self.filename)
+            self.vprint( "Found bz2 file: %s" % zipfname)
             zipped = self._try_to_unzip(zipfname)
             zipped = True
             l3m_data,base,intercept,slope = self._l3read_hdf()
@@ -150,14 +157,20 @@ class Base(base.Grid):
                 (self.__dict__[fld] > self.maxval))
         if nan=="nan":
             self.__dict__[fld][mask] = np.nan
-        self._try_to_zip(zipped)
+
         if ((not os.path.isfile(self.filename + '.npz')) &
             ((self.llat.shape) == (self.jmt,self.imt))):
             self.add_ij()
             self._l3write_npz(l3m_data[~mask], self.imat[~mask],
                               self.jmat[~mask], base, intercept, slope)
+        if (self.only_npz == True) & os.path.isfile(self.filename):
+            os.remove(self.filename)
+        else:
+            self._try_to_zip(zipped)
+
 
     def _l3read_hdf(self, fieldname='l3m_data'):
+        self.vprint( "Reading hdf file")
         sd = SD(self.filename, SDC.READ)
         ds = sd.select(fieldname)
         field     = ds[self.j1:self.j2, self.i1:self.i2].copy()
@@ -191,7 +204,8 @@ class Base(base.Grid):
         return field,base,intercept,slope
 
     def _l3read_npz(self, fld):
-        """Read an npz file with field data as vectors""" 
+        """Read an npz file with field data as vectors"""
+        self.vprint( "Reading npz file")
         l3m_data = self.llat * 0 + self.vc[fld][2] - 1
         fH = np.load(self.filename + '.npz')
         dvec      = fH['dvec']
@@ -211,6 +225,7 @@ class Base(base.Grid):
 
     def _l3write_npz(self, dvec, ivec ,jvec, base, intercept, slope):
         """Create an npz file with field data as vectors""" 
+        self.vprint( "Writing npz file")
         kwargs = {'dvec' : dvec,
                   'ivec' : ivec.astype(np.int16),
                   'jvec' : jvec.astype(np.int16),
@@ -221,12 +236,13 @@ class Base(base.Grid):
     def _try_to_unzip(self, zipfname):
         """Unzip file if exists and and is a valid bzip2 file"""
         if not os.path.isfile(self.filename):
-            err = sbp.call(["bzip2", "-d", zipfname])
+            self.vprint( "Uncompressing file")
+            err = sbp.call([ZIPCMD, "-d", zipfname])
             if err == 1:
                 print "Decompression of " + zipfname + " failed."
                 print "Trying to download again"
                 self.download(self.filename)
-                err = sbp.call(["bzip2", "-d", zipfname])
+                err = sbp.call([ZIPCMD, "-d", zipfname])
                 if err == 1:
                     raise IOError, "Download file failed."
             return True
@@ -235,7 +251,8 @@ class Base(base.Grid):
 
     def _try_to_zip(self, zipped):
         if zipped:
-            err = sbp.call(["bzip2", self.filename])
+            self.vprint( "Compressing file")
+            err = sbp.call([ZIPCMD, self.filename])
             if err ==1 :
                 raise IOError( "Compression of " + self.filename + " failed.")
 

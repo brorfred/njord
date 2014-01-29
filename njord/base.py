@@ -138,7 +138,13 @@ class Grid(object):
             return True
         else:
             return False
-        
+
+
+    def vprint(self, string, log_level=None):
+        if getattr(self, 'verbose', False) == True:
+            print string
+
+                
     def add_ij(self):
         self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
                                           np.arange(self.j2-self.j1))
