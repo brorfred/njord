@@ -25,7 +25,7 @@ class Woa09(base.Grid):
         self.gmt = gmtgrid.Shift(g.variables['lon'][:].copy())
         self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
-        #self.depth = g.variables['depth'][:]
+        self.zlev = g.variables['depth'][:]
 
     def load(self,fldname ): #,jd=731583,yr=0,mn=1,dy=1,hr=3):
         """ Load climatological fields"""
