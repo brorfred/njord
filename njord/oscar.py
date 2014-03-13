@@ -5,8 +5,6 @@ import pylab as pl
 import matplotlib.cm as cm
 from scipy.io import netcdf_file
 
-import pycdf
-
 import projmap
 import gmtgrid
 import figpref
