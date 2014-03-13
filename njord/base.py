@@ -44,7 +44,7 @@ class Grid(object):
                 self.config_file = fnm
                 break
         else:
-            raise NameError('Could not find a config file')
+            raise NameError('Project not included in config files')
         
         
         def splitkey(key, val):
@@ -138,7 +138,13 @@ class Grid(object):
             return True
         else:
             return False
-        
+
+
+    def vprint(self, string, log_level=None):
+        if getattr(self, 'verbose', False) == True:
+            print string
+
+                
     def add_ij(self):
         self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
                                           np.arange(self.j2-self.j1))
@@ -217,14 +223,14 @@ class Grid(object):
             return ivec,jvec
 
     def fld2vec(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
-                daysback=1, cutoff=None, nei=1):
+                daysback=1, nei=1,all_nei=True):
         """Get data from the lat-lon-jd positions """
         if maskvec is not None:
             lonvec = lonvec[maskvec]
             latvec = latvec[maskvec]
             jdvec  = jdvec[maskvec]
+        ivec,jvec = self.ll2ij(lonvec, latvec, nei=nei, all_nei=all_nei) 
         intjdvec  = ((jdvec / djd).astype(np.int)) * djd
-        ivec,jvec = self.ll2ij(lonvec, latvec)#, cutoff, nei) 
         fldvec    = np.zeros((daysback, len(latvec))) * np.nan
         for days in np.arange(daysback):
             for n,jd in enumerate(np.unique(intjdvec)):
@@ -235,8 +241,11 @@ class Grid(object):
                 except IOError:
                     print "No file found"
                     continue
-                fldvec[days, mask] = fld[jvec[mask], ivec[mask]]
                 #fldvec[days, mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
+                if ivec.ndim == 2:
+                    fldvec[days, mask] = np.nanmean(fld[jvec, ivec], axis=1)[mask]
+                else:
+                    fldvec[days, mask] = fld[jvec[mask], ivec[mask]]
         return np.squeeze(fldvec)
             
     def add_ij2ij(self, njord_obj):

@@ -10,7 +10,7 @@ from scipy.io import netcdf_file
 import base
 import gmtgrid
 import reuerflux
-#import bln
+import bln
 
 
 class Winds(object):
@@ -19,6 +19,12 @@ class Winds(object):
         """Generate a timeserie for a gridcell"""
         vec = np.array([self.load(jd)[i,j] for jd in np.arange(jd1,jd2+1)])
         return vec    
+    
+    def setup_grid(self):
+        self.lat,self.lon = bln.grid()
+        self.llon,self.llat = np.meshgrid(self.lon,self.lat)
+
+
 
 class Seawinds(base.Grid):
     """Read jpl Seawinds fields"""
@@ -29,38 +35,37 @@ class Seawinds(base.Grid):
     def setup_grid(self):
 	"""Setup lat-lon matrices for Seawinds"""
         try:
-	    n = netcdf_file(self.gridfile, 'r')
+            n = netcdf_file(self.gridfile, 'r')
         except:
             print 'Error opening the gridfile %s' % datadir + filename
             raise
         self.lat = n.variables['lat'][:]
-        self.lon,self.gr = gmtgrid.config(n.variables['lon'][:].copy(), 0)
+        self.gmt = gmtgrid.Shift(n.variables['lon'][:].copy())
+        self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
 
-    def load(self, fld="nwnd", jd=733805.0):
+    def load(self, fld="nwnd", **kwargs):
 	"""Load field for a given julian date. Returns u,v, or nwnd(windnorm)"""
-        yr = pl.num2date(jd).year
-        mn = pl.num2date(jd).month
-        dy = pl.num2date(jd).day
-        filename1 = "uv%04i%02i%02i.nc" %(yr,mn,dy)
-        filename2 = "uv%04i%02i%02irt.nc" %(yr,mn,dy)
-        if os.path.isfile(datadir + filename1):
-            nc = netcdf_file(datadir + filename1)
-        elif os.path.isfile(datadir + filename2):
-            nc = netcdf_file(datadir + filename2)
+        self._timeparams(**kwargs)
+        filename1 = "uv%04i%02i%02i.nc"   % (self.yr, self.mn, self.dy)
+        filename2 = "uv%04i%02i%02irt.nc" % (self.yr, self.mn, self.dy)
+        if os.path.isfile(self.datadir + filename1):
+            nc = netcdf_file(self.datadir + filename1)
+        elif os.path.isfile(self.datadir + filename2):
+            nc = netcdf_file(self.datadir + filename2)
         else:
-            raise IOError, 'Error opening the windfile %s' % datadir + filename1
-            raise IOError, 'Error opening the windfile %s' % datadir + filename2
+            raise IOError, 'Error opening %s' % self.datadir + filename1
+            raise IOError, 'Error opening %s' % self.datadir + filename2
 	u = nc.variables['u'][:].copy()
         v = nc.variables['v'][:].copy()
 	u[u<-999] = np.nan
 	v[v<-999] = np.nan
 	if (fld=="u") | (fld=="uvel"):
-	    self.uvel = gmtgrid.convert(np.squeeze(u), self.gr)
+	    self.uvel = self.gmt.field(np.squeeze(u))
 	elif (fld=="v") | (fld=="vvel"):
-	    self.vvel = gmtgrid.convert(np.squeeze(v), self.gr)
+	    self.vvel = self.gmt.field(np.squeeze(v))
 	else:
-   	    self.nwnd = gmtgrid.convert(np.squeeze(np.sqrt(u**2 + v**2)),self.gr)
+   	    self.nwnd = self.gmt.field(np.squeeze(np.sqrt(u**2 + v**2)))
 
 
 
@@ -148,18 +153,22 @@ class ncep:
         nwnd[nwnd>200]=np.nan
         return nwnd
 
-class Quikscat(Winds):
+class Quikscat(base.Grid):
     
-    def __init__(self,datadir = "/projData/QUIKSCAT/"):
+    def __init__(self, **kwargs):
+        super(Quikscat, self).__init__(**kwargs)
+
+    def setup_grid(self):
         self.lat,self.lon = bln.grid()
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
-        self.datadir = datadir
         
-    def load(self,jd):
-        u,v = bln.readuv_day(jd)
+        
+    def load(self,**kwargs):
+        self._timeparams(**kwargs)
+        u,v = bln.readuv_day(self.jd)
         nwnd =np.sqrt(u**2 + v**2)
         #nwnd[nwnd>200]=np.nan
-        return nwnd
+        return nwnd[...,self.j1:self.j2, self.i1:self.i2]
 
 class CORE2:
 

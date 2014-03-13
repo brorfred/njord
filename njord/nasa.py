@@ -12,16 +12,18 @@ from pyhdf.SD import SD, SDC
 import base
 import yrday
 
-class MODIS(base.Grid):
+ZIPCMD = "pbzip2"
 
-    def __init__(self, res="9km", **kwargs):
-        self.res = res
-        super(MODIS, self).__init__(**kwargs)
+class Base(base.Grid):
+
+    def __init__(self, **kwargs):
+        super(Base, self).__init__(**kwargs)
         self.lat = self.llat[:,0]
         self.lon = self.llon[0,:]
         self.add_vc()
-        self.datadir = self.datadir + '/A' + self.res + '/' 
-        
+        self.datadir = '%s/%s%s/' % (self.datadir, self.fp, self.res) 
+        self.only_npz = kwargs.get('only_npz', False)
+
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
         if self.res == "9km":
@@ -44,6 +46,7 @@ class MODIS(base.Grid):
         if fld in ["fqy",]:
             pass
         self._timeparams(**kwargs)
+        self.vprint( "load jd=%f and field=%s" % (self.jd, fld))
         if fld == 'Dchl':
             if getattr(self, 'djd1', 0) != self.jd:
                 self.load('chl',fldtype, jd=self.jd)    
@@ -73,10 +76,11 @@ class MODIS(base.Grid):
             datestr = "20021852011365"
         else:
             print "Field type not included"
-        self.filename = ("A%s.L3m_%s_%s_%s%s" % (datestr, fldtype,
-                                            self.vc[fld][0],
-                                            self.res[0],
-                                            self.vc[fld][1]))
+        self.filename = ("%s%s.L3m_%s_%s_%s%s" % (self.fp, datestr, fldtype,
+												  self.vc[fld][0],
+												  self.res[0],
+												  self.vc[fld][1]))
+        self.vprint( "Filename is %s" % (self.filename))
         self._l3read(fld,nan=nan)
         
     def add_landmask(self):
@@ -91,7 +95,7 @@ class MODIS(base.Grid):
         datelist = []
         for line in urllib.urlopen(url):
             if "cgi/getfile" in line:
-                datelist.append(re.findall(r'getfile/A([^E]+).L3m',
+                datelist.append(re.findall(r'getfile/%s([^E]+).L3m' % self.fp,
                                            line)[0][:14])
         self.mc_datedict = {}
         for dstr in datelist[1:]:
@@ -100,17 +104,17 @@ class MODIS(base.Grid):
         
     def add_vc(self):
         """Add a dict with filename variable components"""
-        self.vc = {'k49': ['KD490_Kd_490','km',0,100],
-                   'chl': ['CHL_chlor_a','km',0.001,200],
-                   'poc': ['POC_poc','km',0,10000],
-                   'bbp': ['GIOP01_bbp_443_giop','km',0],
-                   'sst': ['SST','',-2,45],
-                   'par': ['PAR_par','km',-5,200],
-                   'flh': ['FLH_nflh','km',0],
-                   'ipar': ['FLH_ipar','km',0],
-                   'eup': ['KDLEE_Zeu_lee','km',0],
-                   'eup_lee': ['KDLEE_Zeu_lee','km',0],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km',0]
+        self.vc = {'k49': ['KD490_Kd_490',         'km', 0,      100],
+                   'chl': ['CHL_chlor_a',          'km', 0.001,  200],
+                   'poc': ['POC_poc',              'km', 0,    10000],
+                   'bbp': ['GIOP01_bbp_443_giop',  'km', 0,    10000],
+                   'sst': ['SST',                  '',  -2,       45],
+                   'par': ['PAR_par',              'km',-5,      200],
+                   'flh': ['FLH_nflh',             'km', 0,    10000],
+                   'ipar': ['FLH_ipar',            'km', 0,    10000],
+                   'eup': ['KDLEE_Zeu_lee',        'km', 0,    10000],
+                   'eup_lee': ['KDLEE_Zeu_lee',    'km', 0,    10000],
+                   'eup_mor': ['KDMOREL_Zeu_morel','km', 0,    10000]
                    }
 
     def download(self, filename):
@@ -131,6 +135,7 @@ class MODIS(base.Grid):
         if not fld: fld = self.filename.rsplit('_')[-2]
 
         if os.path.isfile(self.filename + '.npz'):
+            self.vprint( "Found npz file.")
             l3m_data,base,intercept,slope = self._l3read_npz(fld)
             zipped = False
         else:
@@ -139,6 +144,7 @@ class MODIS(base.Grid):
                     os.path.isfile(zipfname)):
                 print "File missing, downloading from GSFC"
                 self.download(self.filename)
+            self.vprint( "Found bz2 file: %s" % zipfname)
             zipped = self._try_to_unzip(zipfname)
             zipped = True
             l3m_data,base,intercept,slope = self._l3read_hdf()
@@ -151,14 +157,20 @@ class MODIS(base.Grid):
                 (self.__dict__[fld] > self.maxval))
         if nan=="nan":
             self.__dict__[fld][mask] = np.nan
-        self._try_to_zip(zipped)
+
         if ((not os.path.isfile(self.filename + '.npz')) &
             ((self.llat.shape) == (self.jmt,self.imt))):
             self.add_ij()
             self._l3write_npz(l3m_data[~mask], self.imat[~mask],
                               self.jmat[~mask], base, intercept, slope)
+        if (self.only_npz == True) & os.path.isfile(self.filename):
+            os.remove(self.filename)
+        else:
+            self._try_to_zip(zipped)
+
 
     def _l3read_hdf(self, fieldname='l3m_data'):
+        self.vprint( "Reading hdf file")
         sd = SD(self.filename, SDC.READ)
         ds = sd.select(fieldname)
         field     = ds[self.j1:self.j2, self.i1:self.i2].copy()
@@ -192,7 +204,8 @@ class MODIS(base.Grid):
         return field,base,intercept,slope
 
     def _l3read_npz(self, fld):
-        """Read an npz file with field data as vectors""" 
+        """Read an npz file with field data as vectors"""
+        self.vprint( "Reading npz file")
         l3m_data = self.llat * 0 + self.vc[fld][2] - 1
         fH = np.load(self.filename + '.npz')
         dvec      = fH['dvec']
@@ -212,6 +225,7 @@ class MODIS(base.Grid):
 
     def _l3write_npz(self, dvec, ivec ,jvec, base, intercept, slope):
         """Create an npz file with field data as vectors""" 
+        self.vprint( "Writing npz file")
         kwargs = {'dvec' : dvec,
                   'ivec' : ivec.astype(np.int16),
                   'jvec' : jvec.astype(np.int16),
@@ -222,12 +236,13 @@ class MODIS(base.Grid):
     def _try_to_unzip(self, zipfname):
         """Unzip file if exists and and is a valid bzip2 file"""
         if not os.path.isfile(self.filename):
-            err = sbp.call(["bzip2", "-d", zipfname])
+            self.vprint( "Uncompressing file")
+            err = sbp.call([ZIPCMD, "-d", zipfname])
             if err == 1:
                 print "Decompression of " + zipfname + " failed."
                 print "Trying to download again"
                 self.download(self.filename)
-                err = sbp.call(["bzip2", "-d", zipfname])
+                err = sbp.call([ZIPCMD, "-d", zipfname])
                 if err == 1:
                     raise IOError, "Download file failed."
             return True
@@ -236,38 +251,32 @@ class MODIS(base.Grid):
 
     def _try_to_zip(self, zipped):
         if zipped:
-            err = sbp.call(["bzip2", self.filename])
+            self.vprint( "Compressing file")
+            err = sbp.call([ZIPCMD, self.filename])
             if err ==1 :
                 raise IOError( "Compression of " + self.filename + " failed.")
 
-    def histmoller(self, fieldname, jd1, jd2, y1, y2,
-                   mask=[], bins=100, logy=True):
-        if len(mask)==0: mask = (self.lat !=-800)
-        if logy:
-            vlist = np.exp(np.linspace(np.log(y1), np.log(y2), bins+1))
-        else:
-            vlist = np.linspace(y1, y2, bins+1)
-        hsmat = np.zeros((jd2-jd1+1,bins), dtype=np.int)
-        tvec = np.arange(jd1,jd2+1)
-        for n_t,jd in enumerate(tvec):
-            print pl.num2date(jd)
-            self.load(fieldname, jd=jd)
-            field = self.__dict__[fieldname]
-            field[~mask] = np.nan
-            hsmat[n_t,:],_ = np.histogram(field[~np.isnan(field)], vlist)
 
-        class hiS: pass
-        hiS.tvec = tvec
-        hiS.vlist = vlist
-        hiS.hist = hsmat
-        hiS.norm = (hsmat.astype(float) / hsmat.max(axis=0))
-        self.__dict__[fieldname + "_hiS"] = hiS
+
+
+class MODIS(Base):
+    def __init__(self, res="9km", **kwargs):
+        self.res = res        
+        self.fp = "A"
+        super(MODIS, self).__init__(**kwargs)
+
+class SeaWIFS(Base):
+    def __init__(self, res="9km", **kwargs):
+        self.res = res        
+        self.fp = "S"
+        super(SeaWIFS, self).__init__(**kwargs)
 
 
 
 
 
 
+            
 def mission_min():
         i1 = 0
         i2 = None
