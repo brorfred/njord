@@ -37,7 +37,7 @@ class Seawinds(base.Grid):
         try:
             n = netcdf_file(self.gridfile, 'r')
         except:
-            print 'Error opening the gridfile %s' % datadir + filename
+            print 'Error opening the gridfile %s' % self.gridfile
             raise
         self.lat = n.variables['lat'][:]
         self.gmt = gmtgrid.Shift(n.variables['lon'][:].copy())
