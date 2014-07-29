@@ -6,24 +6,26 @@ class Shift:
 
     def __init__(self, lonvec, idim=1):
         """Find the new centerpoint and adjust the lon vector""" 
+        self.imt = len(lonvec)
         lonvec[lonvec>180] = lonvec[lonvec>180]-360
         lonvec[lonvec<-180] = lonvec[lonvec<-180]+360
         try:
             gr = np.nonzero( (lonvec[1:]-lonvec[:-1]) < 0)[0].item() + 1
         except ValueError:
             raise GridError
-        tmp = lonvec[:gr].copy()
-        self.lonvec = np.hstack( (lonvec[gr:],tmp) )
+        self.lonvec = np.roll(lonvec,self.imt - gr)
         self.idim = idim
         self.gmtpos = gr
     
     def field(self, fld):
         """Convert a field to GMT grid. """
+        axis = np.nonzero(np.array(fld.shape) == len(self.lonvec))[0][0]
         if self.idim == 1:
             fld = np.squeeze(fld)
-            tmp = np.squeeze(fld[...,:self.gmtpos].copy())
-            return np.concatenate( (np.squeeze(fld[..., self.gmtpos:]), tmp), 
-                                   axis=fld.ndim-1 )
+            if fld.shape[axis] == self.imt:
+                return np.roll(fld,self.imt-self.gmtpos,axis=axis)
+            else:
+                raise ValueError, "Lonvec and iaxis of field not of same length"
 
 class GridError(Exception):
     """Exception raised if Shift can't find a minimum"""
