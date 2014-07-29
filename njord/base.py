@@ -28,7 +28,7 @@ class Grid(object):
         self.inkwargs = kwargs
         self._load_presets('njord',kwargs)
         for key,val in kwargs.items():
-            self.__dict__[key] = val
+            setattr(self, key, val)
         self.setup_grid()
         self._set_maxmin_ij()
 
@@ -60,38 +60,42 @@ class Grid(object):
             except ValueError:
                 splitkey(key, val)
 
-
-    def _set_maxmin_ij(self):
-        """Set a potential sub region of the grid if defined """
+    def _llboundaries_to_ij(self):
+        """Calculate i1,i2,j1,j2 from lat and lon"""
         if 'ijarea' in self.inkwargs.keys():
             self.i1,self.i2,self.j1,self.j2 = self.inkwargs['ijarea']    
         for att,val in zip(['i1', 'i2', 'j1', 'j2'], [0,self.imt,0,self.jmt]): 
             if not hasattr(self,att):
                 self.__dict__[att] = val
-
         if 'latlon' in self.inkwargs.keys():
             self.lon1,self.lon2,self.lat1,self.lat2 = self.inkwargs['latlon']
+        
+        lat = (self.llat if hasattr(self,'llat') else self.latvec)[:,np.newaxis]
+        lon =  self.llon if hasattr(self,'llon') else self.lonvec
         if hasattr(self,'lat1'):
-            if self.llat[-1,0] <  self.llat[0,0]:
-                self.j2 = int(np.nonzero(self.llat>self.lat1)[0].max() + 1)
+            if lat[-1,0] < lat[0,0]:
+                self.j2 = int(np.nonzero(lat>self.lat1)[0].max() + 1)
             else:
-                self.j1 = int(np.nonzero(self.llat<self.lat1)[0].max())
+                self.j1 = int(np.nonzero(lat<self.lat1)[0].max())
         if hasattr(self,'lat2'):
-            if self.llat[-1,0] <  self.llat[0,0]: 
-                self.j1 = int(np.nonzero(self.llat<self.lat2)[0].min()-1)
+            if lat[-1,0] < lat[0,0]: 
+                self.j1 = int(np.nonzero(lat<self.lat2)[0].min()-1)
             else:
-                self.j2 = int(np.nonzero(self.llat>self.lat2)[0].min() + 1)
+                self.j2 = int(np.nonzero(lat>self.lat2)[0].min() + 1)
         if hasattr(self,'lon1'):
-            self.i1 = int(np.nonzero(self.llon<=self.lon1)[1].max()) 
+            self.i1 = int(np.nonzero(lon<=self.lon1)[-1].max()) 
         if hasattr(self,'lon2'):
-            self.i2 = int(np.nonzero(self.llon>=self.lon2)[1].min() + 1) 
+            self.i2 = int(np.nonzero(lon>=self.lon2)[-1].min() + 1) 
 
-        if hasattr(self, 'lat'): self.lat  = self.lat[self.j1:self.j2]
-        if hasattr(self, 'lon'): self.lon  = self.lon[self.i1:self.i2]
-        self.llat = self.llat[self.j1:self.j2, self.i1:self.i2]
-        self.llon = self.llon[self.j1:self.j2, self.i1:self.i2]
-
-        for var in ['depth','dxt','dyt','dxu','dyu','dzt','area','vol']:
+    def _set_maxmin_ij(self):
+        """Set a potential sub region of the grid if defined """
+        self._llboundaries_to_ij()
+        if hasattr(self, "latvec"):
+            self.latvec = self.latvec[self.j1:self.j2]
+        if hasattr(self, "lonvec"):
+            self.lonvec = self.lonvec[self.i1:self.i2]                
+        for var in ['depth', 'dxt', 'dyt',  'dxu', 'dyu',  'dzt',
+                    'area',  'vol',  'llon', 'llat']:
             if hasattr(self,var):
                 self.__dict__[var] = self.__dict__[var][self.j1:self.j2,
                                                         self.i1:self.i2]
@@ -151,6 +155,14 @@ class Grid(object):
         self.kdijvec = np.vstack((np.ravel(self.imat),
                                   np.ravel(self.jmat))).T
 
+        self._ijvec = np.arange(np.prod(self.imat.shape))
+
+    @property
+    def ijvec(self):
+        if not hasattr(self, '_ijvec'):
+            self.add_ij()
+        return self._ijvec
+            
     def add_kd(self, mask=None, coord="lonlat"):
         """Generate a KD-tree objects and for the current njord instance"""
         if coord == "ij":
