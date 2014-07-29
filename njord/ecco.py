@@ -69,7 +69,9 @@ class Glob_025_ll(base.Grid):
         output.write(response.read())
         output.close()
 
-    def add_landmask(self):
+    @property
+    def landmask(self):
         """ Generate a landmask for t-positions"""
-        self.landmask = np.isnan(self.depth)
-    
+        if not hasattr(self, '_landmask'):
+            self._landmask = np.isnan(self.depth)
+        return self._landmask
