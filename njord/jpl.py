@@ -5,6 +5,8 @@ from scipy.io import netcdf_file
 
 import base
 
+
+
 class SCB(base.Grid):
     """ Manipulate data from the official jpl SCB runs """
     def __init__(self, datadir="/projData/jplSCB/ROMS/",ijarea=[],
@@ -14,9 +16,9 @@ class SCB(base.Grid):
         self.j1 = 0
         self.j2 = 211
         self.datadir = datadir
-        g = SD(datadir + '/scb_das_grid.nc', SDC.READ)
-        self.lat = g.select('lat')[:]
-        self.lon = g.select('lon')[:]-360
+        g = netcdf_file(datadir + '/scb_das_grid.nc', SDC.READ)
+        self.lat = q.variables['lat'][:]
+        self.lon = g.variables['lon'][:]-360
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
 
     def load(self,fldname,jd=0,yr=0,mn=1,dy=1,hr=3):
@@ -55,10 +57,10 @@ class NOW(base.Grid):
 
     def setup_grid(self):
         """Setup necessary variables for grid """
-        g = netcdf_file(self.gridfile, 'r')
-        self.llat = g.variables['lat_rho'][:]
-        self.llon = g.variables['lon_rho'][:]
-        self.depth = g.variables['h'][:]
+        g = netcdf_file(self.gridfile)
+        self.llat = g.variables['lat_rho'][:].copy()
+        self.llon = g.variables['lon_rho'][:].copy()
+        self.depth = g.variables['h'][:].copy()
         self.Cs_r = np.array([-0.882485522505154, -0.778777844867132,
                               -0.687254423585503, -0.606483342183883,
                               -0.535200908367393, -0.472291883107274,
@@ -96,7 +98,8 @@ class NOW(base.Grid):
         self.ssh =  np.squeeze(nc.variables['zeta'][:])
         self.zlev = ((self.depth + self.ssh)[np.newaxis,:,:] *
                      self.Cs_r[:,np.newaxis,np.newaxis])
-        
-    def add_landmask(self):
+
+    @property
+    def landmask(self):
         """ Generate a landmask for t-positions"""
-        self.landmask = self.depth < 10.0000000001
+        return self.depth <= 10
