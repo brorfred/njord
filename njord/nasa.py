@@ -27,37 +27,27 @@ class Base(base.Grid):
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
         if self.res == "9km":
-            self.i1,self.i2,self.j1,self.j2 = (0000 ,4320, 0, 2160)
+            i1,i2,j1,j2 = (0000 ,4320, 0, 2160)
         elif self.res == "4km":
-            self.i1,self.i2,self.j1,self.j2 = (0000 ,8640, 0, 4320)
-        incr  = 360.0/self.i2
-        jR    = np.arange(self.j1, self.j2)
-        iR    = np.arange(self.i1, self.i2)
+            i1,i2,j1,j2 = (0000 ,8640, 0, 4320)
+        incr  = 360.0/i2
+        jR    = np.arange(j1, j2)
+        iR    = np.arange(i1, i2)
         [x,y] = np.meshgrid(iR,jR)
         self.llat = (  90 - y*incr - incr/2)
         self.llon = (-180 + x*incr + incr/2)
         self.lat = self.llat[:,0]
         self.lon = self.llon[0,:]
-        self.imt = self.i2
-        self.jmt = self.j2
+        self.imt = i2
+        self.jmt = j2
+        self.i1 = i1 if not hasattr(self, 'i1') else self.i1
+        self.i2 = i2 if not hasattr(self, 'i2') else self.i2
+        self.j1 = j1 if not hasattr(self, 'j1') else self.j1
+        self.j2 = j2 if not hasattr(self, 'j2') else self.j2
 
-    def load(self,fld,fldtype="DAY", nan="nan", **kwargs):
-        """Load the satellite field associated with a given time."""
-        if fld in ["fqy",]:
-            pass
-        self._timeparams(**kwargs)
-        self.vprint( "load jd=%f and field=%s" % (self.jd, fld))
-        if fld == 'Dchl':
-            if getattr(self, 'djd1', 0) != self.jd:
-                self.load('chl',fldtype, jd=self.jd)    
-                self.dmat1 = self.chl
-            self.load('chl',fldtype, jd=self.jd+1)
-            self.dmat2 = self.chl
-            self.Dchl = self.dmat2 - self.dmat1
-            self.djd1 = self.jd+1
-            self.dmat1 = self.dmat2
-            return
-     
+    def generate_filename(self, jd, fld='chl', fldtype="DAY"):
+        """Generate filename"""
+        self._timeparams(jd=jd)
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                  pl.date2num(dtm(self.yr,  1,  1))) + 1    
         if fldtype == "MC":
@@ -76,10 +66,53 @@ class Base(base.Grid):
             datestr = "20021852011365"
         else:
             print "Field type not included"
-        self.filename = ("%s%s.L3m_%s_%s_%s%s" % (self.fp, datestr, fldtype,
-												  self.vc[fld][0],
-												  self.res[0],
-												  self.vc[fld][1]))
+        return("%s%s.L3m_%s_%s_%s%s" % (self.fp, datestr, fldtype,
+										self.vc[fld][0], self.res[0],
+                                        self.vc[fld][1]))
+
+    def refresh(self, fld="chl", fldtype="DAY", jd1=None, jd2=None):
+        """ Read a L3 mapped file and add field to current instance"""
+        jd1 = pl.datestr2num('2003-01-01') if jd1 is None else jd1
+        jd2 = int(pl.date2num(dtm.now())) - 2  if jd2 is None else jd2
+        for jd in np.arange(jd1,jd2+1):
+            filename = os.path.join(self.datadir,
+                                    self.generate_filename(jd,fld,fldtype))
+            if not os.path.isfile(filename + '.npz'):
+                print "\n" + pl.num2date(jd).strftime('%Y-%m-%d')
+                try:
+                    self.load(fld, fldtype, jd=jd, verbose=True)
+                except IOError:
+                    print "--- Trying to remove old files ---"
+                    try:
+                        os.remove(filename)
+                    except:
+                        pass
+                    try:
+                        os.remove(filename + ".bz2")
+                    except:
+                        pass
+                    self.load(fld,fldtype,jd=jd,verbose=True)
+                    
+
+
+             
+    def load(self,fld,fldtype="DAY", nan="nan", **kwargs):
+        """Load the satellite field associated with a given time."""
+        if fld in ["fqy",]:
+            pass
+        self._timeparams(**kwargs)
+        self.vprint( "load jd=%f and field=%s" % (self.jd, fld))
+        if fld == 'Dchl':
+            if getattr(self, 'djd1', 0) != self.jd:
+                self.load('chl',fldtype, jd=self.jd)    
+                self.dmat1 = self.chl
+            self.load('chl',fldtype, jd=self.jd+1)
+            self.dmat2 = self.chl
+            self.Dchl = self.dmat2 - self.dmat1
+            self.djd1 = self.jd+1
+            self.dmat1 = self.dmat2
+            return
+        self.filename = self.generate_filename(self.jd, fld, fldtype)
         self.vprint( "Filename is %s" % (self.filename))
         self._l3read(fld,nan=nan)
         
@@ -139,6 +172,7 @@ class Base(base.Grid):
             l3m_data,base,intercept,slope = self._l3read_npz(fld)
             zipped = False
         else:
+            self.vprint( "Didn't find a npz file.")
             zipfname = self.filename + '.bz2'
             if not (os.path.isfile(self.filename) | 
                     os.path.isfile(zipfname)):
@@ -158,8 +192,11 @@ class Base(base.Grid):
         if nan=="nan":
             self.__dict__[fld][mask] = np.nan
 
-        if ((not os.path.isfile(self.filename + '.npz')) &
-            ((self.llat.shape) == (self.jmt,self.imt))):
+        if os.path.isfile(self.filename + '.npz'):
+            self.vprint( "npz file already exists, no need to save.")
+        elif (self.llat.shape) != (self.jmt,self.imt):
+            self.vprint( "Not global grid, can't generate npz file.")
+        else:
             self.add_ij()
             self._l3write_npz(l3m_data[~mask], self.imat[~mask],
                               self.jmat[~mask], base, intercept, slope)
