@@ -40,27 +40,27 @@ class Tpz(base.Grid):
         """Setup necessary variables for grid """
         g = netcdf_file(self.gridfile)
 
-        self.gmt = gmtgrid.Shift(g.variable('gridlon_t')[:])
+        self.gmt = gmtgrid.Shift(g.variables['gridlon_t'][:].copy())
         self.lon = (self.gmt.lonvec).astype(np.float32)
-        self.lat   = g.variable('gridlat_t')[:]
-        self.depth = self.gmt.field(g.variable('depth_t')[:])
-        self.dxt   = self.gmt.field(g.variable('dxt')[:])
-        self.dyt   = self.gmt.field(g.variable('dyt')[:])
-        self.dxu   = self.gmt.field(g.variable('dxu')[:])
-        self.dyu   = self.gmt.field(g.variable('dyu')[:])
-        self.dzt   = self.gmt.field(g.variable('dz_t')[:])
-        self.zlev  = self.gmt.field(g.variable('dz_t')[:])
-        if not hasattr(self, 'k1'): self.k1 = 0
-        if not hasattr(self, 'k2'): self.k2 = len(self.zlev)
-        self.dz    =  g.variable('dz_t')[self.k1:self.k2,25,30]
-        self.vol = ( self.dxt[np.newaxis,...] * 
-                     self.dyt[np.newaxis,...]*self.dzt)
-        self.vol[self.vol<0] = np.nan
+        self.lat   = g.variables['gridlat_t'][:]
+        self.depth = self.gmt.field(g.variables['depth_t'][:])
+        self.dxt   = self.gmt.field(g.variables['dxt'][:])
+        self.dyt   = self.gmt.field(g.variables['dyt'][:])
+        self.dxu   = self.gmt.field(g.variables['dxu'][:])
+        self.dyu   = self.gmt.field(g.variables['dyu'][:])
+        #self.dzt   = self.gmt.field(g.variables['dz_t'][:])
+        #self.zlev  = self.gmt.field(g.variables['dz_t'][:])
+        #if not hasattr(self, 'k1'): self.k1 = 0
+        #if not hasattr(self, 'k2'): self.k2 = len(self.zlev)
+        #self.dz    =  g.variables('dz_t')[self.k1:self.k2,25,30]
+        #self.vol = ( self.dxt[np.newaxis,...] * 
+        #             self.dyt[np.newaxis,...]*self.dzt)
+        #self.vol[self.vol<0] = np.nan
         #self.zlev = [0,] + np.cumsum(self.dz)-10
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         self.area = self.dxt * self.dyt
-        for v in ['dzt','llon','llat']:
-            self.__dict__[v] = self.__dict__[v].astype(np.float32)
+        #for v in ['dzt','llon','llat']:
+        #    self.__dict__[v] = self.__dict__[v].astype(np.float32)
 
 
     def _setup_fields(self):
