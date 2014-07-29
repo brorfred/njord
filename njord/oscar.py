@@ -18,8 +18,8 @@ class Oscar(base.Grid):
 
     def setup_grid(self):
         gc = netcdf_file(self.gridfile)
-        self.lat = gc.variables['latitude'][0:self.jmt]
-        self.gmt = gmtgrid.Shift(gc.variables['longitude'][0:self.imt].copy())
+        self.lat = gc.variables['latitude'][:]
+        self.gmt = gmtgrid.Shift(gc.variables['longitude'][:self.imt].copy())
         self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         
@@ -40,8 +40,8 @@ class Oscar(base.Grid):
             nc2 = netcdf_file(self.datadir + filenam2)                    
             t2 = 0
         def readfld(ncvar):
-            return self.gmt.field(ncvar[t1, 0,:,:])[self.j1:self.j2,
-                                                    self.i1:self.i2]
+            return self.gmt.field(ncvar[t1, 0,:,:self.imt])[self.j1:self.j2,
+                                                            self.i1:self.i2]
         u1 = readfld(nc1.variables['u'])
         v1 = readfld(nc1.variables['v'])
         u2 = readfld(nc2.variables['u'])
