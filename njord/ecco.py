@@ -1,5 +1,7 @@
-import os, urllib2
+import os
+from urlparse import urljoin
 from datetime import datetime as dtm
+
 
 import numpy as np
 import pylab as pl
@@ -11,16 +13,18 @@ import gmtgrid
 class Glob_025_ll(base.Grid):
     """Setup Ecco 0.25 deg fields."""
     def __init__(self, **kwargs):
-        super(Glob_025_ll, self).__init__(**kwargs)
-        self.add_mp()
         self.pardict = {'uvel':'UVEL',
                         'vvel':'VVEL',
                         'wvel':'WVEL',
                         'salt':'SALT',
                         'temp':'THETA'}
+        super(Glob_025_ll, self).__init__(**kwargs)
+        self.add_mp()
 
     def setup_grid(self):
         """Setup necessary variables for grid """
+        if not os.path.isfile(self.gridfile):
+            self.load('uvel')
         g = netcdf_file(self.gridfile, 'r')
         self.lat = g.variables['LATITUDE_T'][:]
         self.gmt = gmtgrid.Shift(g.variables['LONGITUDE_T'][:].copy())
@@ -56,18 +60,13 @@ class Glob_025_ll(base.Grid):
         self.__dict__[fldname] = fld[...,self.j1:self.j2, self.i1:self.i2]
 
     def download(self,filename, fieldname):
-        """Download a missing file from GSFC's website"""
+        """Download a missing file from source website"""
         print "Downloading file from server. This might take several minutes."
-        uri = "http://ecco2.jpl.nasa.gov"
-        folder = "data1/cube/cube92/lat_lon/quart_90S_90N/%s.nc" % self.pardict[fieldname]
-        url = "%s/%s/%s" % (uri, folder, os.path.basename(filename))
-        try:
-            response = urllib2.urlopen(url)
-        except:
-            raise IOError, "File not found on the server.\n tried %s" % url
-        output = open(filename, 'wb')
-        output.write(response.read())
-        output.close()
+        url = urljoin(self.dataurl, "%s.nc" % self.pardict[fieldname],
+                      os.path.basename(filename))
+        self.retrive_file(url, filename)
+        
+       
 
     @property
     def landmask(self):

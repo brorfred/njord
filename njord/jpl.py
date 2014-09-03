@@ -9,44 +9,34 @@ import base
 
 class SCB(base.Grid):
     """ Manipulate data from the official jpl SCB runs """
-    def __init__(self, datadir="/projData/jplSCB/ROMS/",ijarea=[],
-                 lat1=None,lat2=None,lon1=None,lon2=None):
-        self.i1 = 0
-        self.i2 = 111
-        self.j1 = 0
-        self.j2 = 211
-        self.datadir = datadir
-        g = netcdf_file(datadir + '/scb_das_grid.nc', SDC.READ)
+    def __init__(self, **kwargs):
+        super(SCB, self).__init__()
+        self.add_mp()
+    
+    def setup_grid(self):
+        """Setup necessary variables for grid """
+        g = netcdf_file(self.datadir + self.datafile)
         self.lat = q.variables['lat'][:]
         self.lon = g.variables['lon'][:]-360
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
 
-    def load(self,fldname,jd=0,yr=0,mn=1,dy=1,hr=3):
+    def load(self,fldname, **kwargs):
         """ Load Cali Current fields for a given day"""
-        i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
-        if jd!=0:
-            yr = pl.num2date(jd).year
-            mn = pl.num2date(jd).month
-            dy = pl.num2date(jd).day
-            hr = pl.num2date(jd+0.125).hour
-            mi = pl.num2date(jd).minute
-            se = pl.num2date(jd).second      
-        elif yr!=0:
-            jd = pl.date2num(dtm(yr,mn,dy,hr))
-        yd = jd - pl.date2num(dtm(yr,1,1)) + 1
-        filename = "/scb_das_%04i%02i%02i%02i.nc" % (yr,mn,dy,hr)
+        self._timeparams(**kwargs)
+        filename = ("/scb_das_%04i%02i%02i%02i.nc" %
+                    (self.yr, self.mn, self.dy, self.hr))
         print filename
-        nc = pycdf.CDF(self.datadir + filename)        
-        fld =  nc.var(fldname)[:]
+        nc = netcdf_file(self.datadir + filename)        
+        fld =  nc.variables(fldname)[:].copy()
         fld[fld==-9999]=np.nan
-        self.__dict__[fldname] = fld
+        setattr(self, "fldname", fld)
          
-    def add_landmask(self):
-        nc = pycdf.CDF(self.datadir + '/scb_das_grid.nc')
-        msk = nc.var('temp')[0,0,...]
-        msk[msk!=-9999] = 1
-        msk[msk==-9999] = 0
-        self.landmask = msk
+    @property
+    def landmask(self):
+        if not hasattr(self, "_landmask"):
+            nc = pycdf.CDF(self.datadir + '/scb_das_grid.nc')
+            self._landmask = nc.var('temp')[0,0,...] == -9999
+        return self._landmask
 
  
 class NOW(base.Grid):

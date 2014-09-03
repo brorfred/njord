@@ -1,20 +1,19 @@
 import os, os.path
-from datetime import datetime as dtm
 import urllib
-import urllib2
-import re
+import zipfile
+import tempfile
 
 import numpy as np
-import pylab as pl
 
 import base
-import yrday
+from utils import yrday
 
 class Glob30s(base.Grid):
 
     def __init__(self, **kwargs):
         super(Glob30s, self).__init__(**kwargs)
         self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
+    
         
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
@@ -30,46 +29,49 @@ class Glob30s(base.Grid):
     def load(self, fld, mn=None, **kwargs):
         """Load the satellite field associated with a given time."""
         self._timeparams(**kwargs)
-        self.mn = mn if mn is not None else mn
-        print self.mn
-        fn = "%s/tmean_30s_bil/tmean_%i.bil" % (self.datadir, self.mn)
+        self.mn = mn if mn is not None else self.mn
+        if fld == "alt":
+            fn = "%s/alt.bil" % self.datadir
+        else:
+            fn = "%s/tmean_%i.bil" % (self.datadir, self.mn)
+        if not os.path.isfile(fn):
+            self.download(fld)
         mat = np.fromfile(fn, dtype="<i2").reshape(self.full_jmt, self.full_imt)
         mat = mat[self.j1:self.j2, self.i1:self.i2].astype(np.float16)
         mat[mat < -9998] = np.nan
-        setattr(self, fld, mat/10)
+        setattr(self, fld, mat * self.vc['alt'][2])
         
     def add_landmask(self):
         """Add a landmask field to the current instance"""
         if not hasattr(self,'landmask'):
             self.load('par','CU', nan="nan")
             self.landmask = np.isnan(self.par)
-        
-    def add_vc(self):
+
+    @property
+    def vc(self):
         """Add a dict with filename variable components"""
-        self.vc = {'k49': ['KD490_Kd_490',         'km', 0,      100],
-                   'chl': ['CHL_chlor_a',          'km', 0.001,  200],
-                   'poc': ['POC_poc',              'km', 0,    10000],
-                   'bbp': ['GIOP01_bbp_443_giop',  'km', 0,    10000],
-                   'sst': ['SST',                  '',  -2,       45],
-                   'par': ['PAR_par',              'km',-5,      200],
-                   'flh': ['FLH_nflh',             'km', 0,    10000],
-                   'ipar': ['FLH_ipar',            'km', 0,    10000],
-                   'eup': ['KDLEE_Zeu_lee',        'km', 0,    10000],
-                   'eup_lee': ['KDLEE_Zeu_lee',    'km', 0,    10000],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km', 0,    10000]
+        return  {'tmean': ['Mean Temperature', 'C', 0.1],
+                 'tmax':  ['Max Temperature',  'C', 0.1],
+                 'prec':  ['Precipitation',   'mm', 1],
+                 'alt':   ['Altitide',         'm', 1],
                    }
 
-    def download(self, filename):
-        """Download a missing file from GSFC's website"""
-        uri = "http://oceandata.sci.gsfc.nasa.gov/cgi/getfile/"
-        url = "%s%s.bz2" % (uri, os.path.basename(filename))
-        try:
-            response = urllib2.urlopen(url)
-        except:
-            raise IOError, "File not found on the server.\n tried %s" % url
-        output = open(filename + ".bz2",'wb')
-        output.write(response.read())
-        output.close()
+    def download(self, fldname):
+        """Download missing data files"""
+        print "Downloading all %s datafiles. This will take a while." % fldname
+        url = "%s/%s_30s_bil.zip" % (self.dataurl, fldname)
+        tmpzipfile = os.path.join(tempfile.gettempdir(), "tmp.zip")
+        urllib.urlretrieve(url, tmpzipfile)
+        with zipfile.ZipFile(tmpzipfile, "r") as z:
+            z.extractall(self.datadir)
+
+    @property
+    def landmask(self):
+        if not hasattr(self, "_landmask"):
+            self._landmask =  ~np.isnan(self.get_field('alt'))
+        return self._landmask        
+
+  
 
 def cristian(filename="growth_days.csv", tbase=0):
     import pandas as pd
@@ -96,3 +98,14 @@ def cristian(filename="growth_days.csv", tbase=0):
     np.savetxt(filename, mat.T, fmt="%.8f", delimiter=",", header=headerstr) 
 
     return ll['Xswr99'], ll['Yswr99'], grdays
+
+
+"""
+from scipy.interpolate import Rbf, SmoothBivariateSpline
+from njord import worldclim
+
+wc = worldclim.Glob30s(lat1=53,lat2=73,lon1=3,lon2=43)
+mat = loadtxt('S_lakes_Bror.csv', delimiter=",",skiprows=1,usecols=[1,2,3,4,5,6])
+ rbf = Rbf(mat[1:500,0],mat[1:500,1],mat[1:500,4], epsilon=2)
+ ZI = rbf(wc.llon, wc.llat))
+"""

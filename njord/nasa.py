@@ -10,7 +10,7 @@ import pylab as pl
 
 from pyhdf.SD import SD, SDC
 import base
-import yrday
+from utils import yrday
 
 ZIPCMD = "pbzip2"
 
@@ -73,16 +73,18 @@ class Base(base.Grid):
     def refresh(self, fld="chl", fldtype="DAY", jd1=None, jd2=None):
         """ Read a L3 mapped file and add field to current instance"""
         jd1 = pl.datestr2num('2003-01-01') if jd1 is None else jd1
-        jd2 = int(pl.date2num(dtm.now())) - 2  if jd2 is None else jd2
-        for jd in np.arange(jd1,jd2+1):
+        jd2 = int(pl.date2num(dtm.now())) - 1  if jd2 is None else jd2
+        for jd in np.arange(jd1, jd2):
             filename = os.path.join(self.datadir,
                                     self.generate_filename(jd,fld,fldtype))
+
+            print " --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d')
+            print "Checking %s" % filename + '.npz'
             if not os.path.isfile(filename + '.npz'):
-                print "\n" + pl.num2date(jd).strftime('%Y-%m-%d')
                 try:
                     self.load(fld, fldtype, jd=jd, verbose=True)
                 except IOError:
-                    print "--- Trying to remove old files ---"
+                    print "Downloading failed. Trying to remove old files."
                     try:
                         os.remove(filename)
                     except:
@@ -91,12 +93,17 @@ class Base(base.Grid):
                         os.remove(filename + ".bz2")
                     except:
                         pass
-                    self.load(fld,fldtype,jd=jd,verbose=True)
-                    
-
+                    try:
+                        self.load(fld,fldtype,jd=jd,verbose=True)
+                    except:
+                        print ("   ###   Warning! Failed to add %s   ###" %
+                               os.path.basename(filename))
+                print "\n"
+            else:
+                print "found"
 
              
-    def load(self,fld,fldtype="DAY", nan="nan", **kwargs):
+    def load(self, fld, fldtype="DAY", nan="nan", **kwargs):
         """Load the satellite field associated with a given time."""
         if fld in ["fqy",]:
             pass
@@ -115,12 +122,14 @@ class Base(base.Grid):
         self.filename = self.generate_filename(self.jd, fld, fldtype)
         self.vprint( "Filename is %s" % (self.filename))
         self._l3read(fld,nan=nan)
-        
-    def add_landmask(self):
-        """Add a landmask field to the current instance"""
-        if not hasattr(self,'landmask'):
+
+    @property
+    def landmask(self):
+        """Return a landmask"""
+        if not hasattr(self,'_landmask'):
             self.load('par','CU', nan="nan")
-            self.landmask = np.isnan(self.par)
+            self._landmask = np.isnan(self.par)
+        return self._landmask
         
     def add_mnclim(self):
         """Add a list with file name dates for Monthly climatologies"""
@@ -137,23 +146,25 @@ class Base(base.Grid):
         
     def add_vc(self):
         """Add a dict with filename variable components"""
-        self.vc = {'k49': ['KD490_Kd_490',         'km', 0,      100],
-                   'chl': ['CHL_chlor_a',          'km', 0.001,  200],
-                   'poc': ['POC_poc',              'km', 0,    10000],
-                   'bbp': ['GIOP01_bbp_443_giop',  'km', 0,    10000],
-                   'sst': ['SST',                  '',  -2,       45],
-                   'par': ['PAR_par',              'km',-5,      200],
-                   'flh': ['FLH_nflh',             'km', 0,    10000],
-                   'ipar': ['FLH_ipar',            'km', 0,    10000],
-                   'eup': ['KDLEE_Zeu_lee',        'km', 0,    10000],
-                   'eup_lee': ['KDLEE_Zeu_lee',    'km', 0,    10000],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km', 0,    10000]
+        self.vc = {'k49': ['KD490_Kd_490',         'km',  0,      100],
+                   'chl': ['CHL_chlor_a',          'km',  0.001,  200],
+                   'poc': ['POC_poc',              'km',  0,     1000],
+                   'bbp': ['GIOP01_bbp_443_giop',  'km',  0,    10000],
+                   'sst': ['SST',                  '',   -2,       45],
+                   'par': ['PAR_par',              'km', -5,      200],
+                   'flh': ['FLH_nflh',             'km',  0,    10000],
+                   'ipar': ['FLH_ipar',            'km',  0,    10000],
+                   'eup': ['KDLEE_Zeu_lee',        'km',  0,    10000],
+                   'eup_lee': ['KDLEE_Zeu_lee',    'km',  0,    10000],
+                   'eup_mor': ['KDMOREL_Zeu_morel','km',  0,    10000]
                    }
 
     def download(self, filename):
         """Download a missing file from GSFC's website"""
         uri = "http://oceandata.sci.gsfc.nasa.gov/cgi/getfile/"
         url = "%s%s.bz2" % (uri, os.path.basename(filename))
+        if not os.path.isdir(os.path.dirname(filename)):
+            os.makedirs(os.path.dirname(filename))
         try:
             response = urllib2.urlopen(url)
         except:
