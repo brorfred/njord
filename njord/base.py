@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import pylab as pl
 from scipy.spatial import cKDTree
+from scipy.stats import nanmedian
 
 import requests
 import gmtgrid
@@ -31,6 +32,8 @@ class Grid(object):
         self._load_presets('njord',kwargs)
         for key,val in kwargs.items():
             setattr(self, key, val)
+        if not os.path.isdir(self.datadir):
+            os.makedirs(self.datadir)
         self.setup_grid()
         self._set_maxmin_ij()
 
@@ -72,8 +75,8 @@ class Grid(object):
         if 'latlon' in self.inkwargs.keys():
             self.lon1,self.lon2,self.lat1,self.lat2 = self.inkwargs['latlon']
         
-        lat = (self.llat if hasattr(self,'llat') else self.latvec)[:,np.newaxis]
-        lon =  self.llon if hasattr(self,'llon') else self.lonvec
+        lat = self.llat if hasattr(self, 'llat') else self.latvec[:, np.newaxis]
+        lon = self.llon if hasattr(self, 'llon') else self.lonvec[:, np.newaxis]
         if hasattr(self,'lat1'):
             if lat[-1,0] < lat[0,0]:
                 self.j2 = int(np.nonzero(lat>self.lat1)[0].max() + 1)
@@ -128,9 +131,12 @@ class Grid(object):
         self._jd_to_dtm()
 
     def _jd_to_dtm(self):
-        for jdpar,dtpar in zip(['yr','mn','dy','hr','min','sec'],
-                               ['%Y','%m','%d','%H','%M', '%S']):
-            self.__dict__[jdpar] = int(pl.num2date(self.jd).strftime(dtpar))
+        print type(self.jd)
+        dtobj = pl.num2date(self.jd)
+        njattrlist = ['yr',  'mn',   'dy', 'hr',  'min',    'sec']
+        dtattrlist = ['year','month','day','hour','minute', 'second']
+        for njattr,dtattr in zip(njattrlist, dtattrlist):
+            setattr(self, njattr, getattr(dtobj, dtattr))
         self.yd = self.jd - pl.date2num(dtm(self.yr,1,1)) + 1
 
     def _calcload(self, fldname, **kwargs):
@@ -313,6 +319,11 @@ class Grid(object):
         fld[:,-1,:-1] = flint
         fld[:,:-1,-1] = fljnt
 
+    def rebin(self, field, shape):
+        """Rebin field to a coarser matrix"""
+        sh = shape[0],field.shape[0]//shape[0],shape[1],field.shape[1]//shape[1]
+        return nanmedian(nanmedian(field.reshape(sh),axis=-1), axis=1)
+
     def get_field(self, field,  **kwargs):
         self.load(field, **kwargs)
         return self.__dict__[field]
@@ -344,16 +355,22 @@ class Grid(object):
         for i,j in zip([0,0,1,-1, -1,-1,1,1],[1,-1,0,0,-1,1,-1,1]):
             self.landmask[ii+i,jj+j]=0
 
-    def timeseries(self, fieldname, jd1, jd2, mask=[]):
+    def timeseries(self, fieldname, jd1, jd2, mask=None):
         """Create a timeseries of fields using mask to select data"""
         if len(mask)==0: mask = (self.lat !=-800)
-        field = self.llat * 0 
+        mask = mask if mask is not None else self.llat == self.llat
         for n,jd in enumerate(np.arange(jd1,jd2+1)):
             self.load(fieldname, jd=jd)
             field[n,:,:] = self.__dict__[fieldname]
             field[n,~mask] = np.nan
         self.__dict__[fieldname + 't'] = field
         self.tvec = np.arange(jd1, jd2+1)
+        field = np.zeros((len(self.tvec),) + self.llat.shape) 
+        for n,jd in enumerate(self.tvec):
+            print pl.num2date(jd), pl.num2date(jd2)
+            field[n,:,:] = self.get_field(fieldname, jd=jd)
+            field[n, ~mask] = np.nan
+        setattr(self, fieldname + 't', field)
 
     def histmoller(self, fieldname, jd1, jd2, y1, y2,
                    mask=[], bins=100, logy=True):
