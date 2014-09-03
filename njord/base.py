@@ -3,6 +3,8 @@ import ConfigParser
 import json
 import datetime
 import warnings
+import ftplib
+import urlparse
 
 import numpy as np
 import pylab as pl
@@ -131,7 +133,6 @@ class Grid(object):
         self._jd_to_dtm()
 
     def _jd_to_dtm(self):
-        print type(self.jd)
         dtobj = pl.num2date(self.jd)
         njattrlist = ['yr',  'mn',   'dy', 'hr',  'min',    'sec']
         dtattrlist = ['year','month','day','hour','minute', 'second']
@@ -330,17 +331,26 @@ class Grid(object):
 
     def retrive_file(self, url, local_filename):
         """Retrive file from remote server via http"""
-        r = requests.get(url, stream=True)
-        if r.ok:
-            with open(local_filename, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=1024): 
-                    if chunk: # filter out keep-alive new chunks
-                        f.write(chunk)
-                        f.flush()
-            return True
+        spliturl = urlparse.urlsplit(url)
+        if spliturl.scheme == "ftp":
+            ftp = ftplib.FTP(spliturl.netloc) 
+            ftp.login("anonymous", "njord@bror.us") 
+            ftp.cwd(spliturl.path)
+            ftp.retrbinary("RETR %s" % os.path.basename(local_filename),
+                           open(local_filename, 'wb').write)
+            ftp.quit()
         else:
-            warnings.warn("Could not download file from server")
-            return False
+            r = requests.get(url, stream=True)
+            if r.ok:
+                with open(local_filename, 'wb') as f:
+                    for chunk in r.iter_content(chunk_size=1024): 
+                        if chunk: # filter out keep-alive new chunks
+                            f.write(chunk)
+                            f.flush()
+                return True
+            else:
+                warnings.warn("Could not download file from server")
+                return False
 
     def get_landmask(self):
         if not hasattr(self,'landmask'):

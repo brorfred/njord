@@ -24,7 +24,7 @@ class Glob_025_ll(base.Grid):
     def setup_grid(self):
         """Setup necessary variables for grid """
         if not os.path.isfile(self.gridfile):
-            self.load('uvel')
+            self.download(self.gridfile, 'vvel')
         g = netcdf_file(self.gridfile, 'r')
         self.lat = g.variables['LATITUDE_T'][:]
         self.gmt = gmtgrid.Shift(g.variables['LONGITUDE_T'][:].copy())
@@ -39,8 +39,8 @@ class Glob_025_ll(base.Grid):
     def load(self, fldname, **kwargs):
         """ Load velocity fields for a given day"""
         if fldname == "uv":
-            self.load('u', **kwargs)
-            self.load('v', **kwargs)
+            self.load('uvel', **kwargs)
+            self.load('vvel', **kwargs)
             self.uv = np.sqrt(self.u**2 + self.v**2)/2
             return
         self._timeparams(**kwargs)
