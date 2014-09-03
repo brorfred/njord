@@ -2,11 +2,13 @@ import os
 import ConfigParser
 import json
 import datetime
+import warnings
 
 import numpy as np
 import pylab as pl
 from scipy.spatial import cKDTree
 
+import requests
 import gmtgrid
 import projmap
 try:
@@ -123,7 +125,6 @@ class Grid(object):
             ddlist = np.array(self.hourlist).astype(float)/24
             ddpos = np.argmin(np.abs(ddlist-dd))
             self.jd = int(self.jd) + ddlist[ddpos]
-            
         self._jd_to_dtm()
 
     def _jd_to_dtm(self):
@@ -315,6 +316,20 @@ class Grid(object):
     def get_field(self, field,  **kwargs):
         self.load(field, **kwargs)
         return self.__dict__[field]
+
+    def retrive_file(self, url, local_filename):
+        """Retrive file from remote server via http"""
+        r = requests.get(url, stream=True)
+        if r.ok:
+            with open(local_filename, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024): 
+                    if chunk: # filter out keep-alive new chunks
+                        f.write(chunk)
+                        f.flush()
+            return True
+        else:
+            warnings.warn("Could not download file from server")
+            return False
 
     def get_landmask(self):
         if not hasattr(self,'landmask'):
