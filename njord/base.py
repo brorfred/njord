@@ -78,7 +78,7 @@ class Grid(object):
             self.lon1,self.lon2,self.lat1,self.lat2 = self.inkwargs['latlon']
         
         lat = self.llat if hasattr(self, 'llat') else self.latvec[:, np.newaxis]
-        lon = self.llon if hasattr(self, 'llon') else self.lonvec[:, np.newaxis]
+        lon = self.llon if hasattr(self, 'llon') else self.lonvec[np.newaxis, :]
         if hasattr(self,'lat1'):
             if lat[-1,0] < lat[0,0]:
                 self.j2 = int(np.nonzero(lat>self.lat1)[0].max() + 1)
@@ -94,6 +94,11 @@ class Grid(object):
         if hasattr(self,'lon2'):
             self.i2 = int(np.nonzero(lon>=self.lon2)[-1].min() + 1) 
 
+    @property
+    def shape(self):
+        return self.llat.shape
+
+            
     def _set_maxmin_ij(self):
         """Set a potential sub region of the grid if defined """
         self._llboundaries_to_ij()

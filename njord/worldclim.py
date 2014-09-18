@@ -14,7 +14,6 @@ class Glob30s(base.Grid):
         super(Glob30s, self).__init__(**kwargs)
         self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
     
-        
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
         dllarr = lambda dll,mt: np.cumsum([dll] * mt)
