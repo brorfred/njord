@@ -45,16 +45,16 @@ class Seawinds(base.Grid):
         else:
             raise IOError, 'Error opening %s' % self.datadir + filename1
             raise IOError, 'Error opening %s' % self.datadir + filename2
-	u = nc.variables['u'][:].copy()
+        u = nc.variables['u'][:].copy()
         v = nc.variables['v'][:].copy()
-	u[u<-999] = np.nan
-	v[v<-999] = np.nan
-	if (fld=="u") | (fld=="uvel"):
-	    self.uvel = self.gmt.field(np.squeeze(u))
-	elif (fld=="v") | (fld=="vvel"):
-	    self.vvel = self.gmt.field(np.squeeze(v))
-	else:
-   	    self.nwnd = self.gmt.field(np.squeeze(np.sqrt(u**2 + v**2)))
+        u[u<-999] = np.nan
+        v[v<-999] = np.nan
+        if (fld=="u") | (fld=="uvel"):
+            self.uvel = self.gmt.field(np.squeeze(u))
+        elif (fld=="v") | (fld=="vvel"):
+            self.vvel = self.gmt.field(np.squeeze(v))
+        else:
+            self.nwnd = self.gmt.field(np.squeeze(np.sqrt(u**2 + v**2)))
 
 
 
