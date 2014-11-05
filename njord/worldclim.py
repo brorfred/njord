@@ -26,7 +26,7 @@ class Glob30s(base.Grid):
         self.jmt = self.j2 - self.j1 + 1
                 
     def load(self, fld, mn=None, **kwargs):
-        """Load the satellite field associated with a given time."""
+        """Load the data field associated with a given time."""
         self._timeparams(**kwargs)
         self.mn = mn if mn is not None else self.mn
         if fld == "alt":
