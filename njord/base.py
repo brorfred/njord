@@ -13,7 +13,11 @@ from scipy.stats import nanmedian
 
 import requests
 import gmtgrid
-import projmap
+try:
+    import projmap
+    USE_BASEMAP = True
+except:
+    USE_BASEMAP = False
 try:
     import figpref
     USE_FIGPREF = True
@@ -428,12 +432,14 @@ class Grid(object):
     @property
     def mp(self, **kwargs):
         """Return a projmap instance as defined by self.map_region"""
-        if not 'mp' in self.__dict__.keys():
-            self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
-        if self.__dict__['mp'].region != self.map_region:
-            self.__dict__['mp'] = projmap.Projmap(self.map_region)
-        return self.__dict__['mp']
-
+        if USE_BASEMAP:
+            if not 'mp' in self.__dict__.keys():
+                self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
+            if self.__dict__['mp'].region != self.map_region:
+                self.__dict__['mp'] = projmap.Projmap(self.map_region)
+            return self.__dict__['mp']
+        else:
+            raise ImportError, "Basemap not installed. Learn more at http://matplotlib.org/basemap/"
     def pcolor(self,fld, **kwargs):
         """Make a pcolor-plot of field"""
         if USE_FIGPREF: figpref.current()
