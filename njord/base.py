@@ -287,14 +287,24 @@ class Grid(object):
         self.nj_ivec,self.nj_jvec = self.ll2ij(lonvec[self.nj_mask],
                                                latvec[self.nj_mask])
 
-    def reproject(self, njord_obj, field):
+        
+    def reproject(self, nj_obj, field):
         """Reproject a field of another njord inst. to the current grid"""
-        if not hasattr(self,'nj_ivec'): self.add_njijvec(njord_obj)
+        if not hasattr(self,'nj_ivec'):
+            self.add_njijvec(nj_obj)
+        field = getattr(nj_obj, field) if type(field) is str else field
+        
+        if hasattr(nj_obj, 'tvec') and (len(nj_obj.tvec) == field.shape[0]):
+            newfield = np.zeros(nj_obj.tvec.shape + self.llat.shape)
+            for tpos in range(len(nj_obj.tvec)):
+                newfield[tpos,:,:] = self.reproject(nj_obj, field[tpos,...])
+            return newfield
+
         di = self.i2 - self.i1
         dj = self.j2 - self.j1
         xy = np.vstack((self.nj_jvec, self.nj_ivec))
         if type(field) == str:
-            weights = np.ravel(njord_obj.__dict__[field])[self.nj_mask]
+            weights = np.ravel(nj_obj.__dict__[field])[self.nj_mask]
         else:
             weights = np.ravel(field)[self.nj_mask]
         mask = ~np.isnan(weights) 
@@ -372,13 +382,7 @@ class Grid(object):
 
     def timeseries(self, fieldname, jd1, jd2, mask=None):
         """Create a timeseries of fields using mask to select data"""
-        if len(mask)==0: mask = (self.lat !=-800)
         mask = mask if mask is not None else self.llat == self.llat
-        for n,jd in enumerate(np.arange(jd1,jd2+1)):
-            self.load(fieldname, jd=jd)
-            field[n,:,:] = self.__dict__[fieldname]
-            field[n,~mask] = np.nan
-        self.__dict__[fieldname + 't'] = field
         self.tvec = np.arange(jd1, jd2+1)
         field = np.zeros((len(self.tvec),) + self.llat.shape) 
         for n,jd in enumerate(self.tvec):
