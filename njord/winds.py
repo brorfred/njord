@@ -217,13 +217,11 @@ class CORE2:
             return
         djd = np.ceil(jd2 - jd1)
         wndjd = np.zeros( ( (djd,) + self.llon.shape) ) 
-        u = self.gmt.field(nu.variables['U_10_MOD'][t1:t2,...].copy())
-        v = self.gmt.field(nv.variables['V_10_MOD'][t1:t2,...].copy())
-        nwnd = np.sqrt(u**2 + v**2)
+        self.uwnd = self.gmt.field(nu.variables['U_10_MOD'][t1:t2,...].copy())
+        self.vwnd = self.gmt.field(nv.variables['V_10_MOD'][t1:t2,...].copy())
+        nwnd = np.sqrt(self.uwnd**2 + self.vwnd**2)
         for t in np.arange(0,djd*4,4):
             wndjd[t/4,...] = np.mean(nwnd[t:t+4,...],axis=0)
-
-        #nwnd[nwnd>200]=np.nan
         nu.close()
         nv.close()
-        return np.squeeze(wndjd)
+        self.nwnd = np.squeeze(wndjd)
