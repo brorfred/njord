@@ -13,7 +13,10 @@ import matplotlib.cm as cm
 from scipy.stats import nanmean
 from scipy.io import netcdf_file
 
+from netCDF4 import Dataset
+
 import base
+import winds
 import gmtgrid
 import grid
 import bln
@@ -100,11 +103,11 @@ class Tpz(base.Grid):
         if not hasattr(self, 't1'): self.t1 = 0
         if not hasattr(self, 't2'): self.t2 = None
         def load(keysuff):
-            n = pycdf.CDF(self.vd[self.keypref + keysuff][5])
-            return n.var(self.vd[self.keypref + keysuff][0])[:]
+            print self.vd[self.keypref + keysuff][2]
+            n = Dataset(self.vd[self.keypref + keysuff][2])
+            return n.variables[self.vd[self.keypref + keysuff][0]][:]
         self.tvec = load('time')[self.t1:self.t2] + 623542
         self.tops = self.tvec
-
 
     def condload(self, parlist):
         for par in (parlist):
@@ -227,23 +230,16 @@ class Tpz(base.Grid):
         
         elif par == 'crwnd':
             self.fields[-1] = 'nwnd'
-            import winds
-            cr = winds.core2()
-            a = cr.load(self.tvec.min(),self.tvec.max())
-            llat = np.ravel(cr.llat)
-            llon = np.ravel(cr.llon)
-            def imr(a):
-                return griddata(llat, llon, np.ravel(a),
-                                self.llat, self.llon)
-            if a.ndim > 2 :
-                b = np.zeros((a.shape[-3],len(self.lat),len(self.lon)))
-                for t in np.arange(a.shape[-3]):
-                    b[t,:,:]=imr(a[t,:,:])
-            else:
-                b = imr(a)
-            self.crwnd = b
+            cr = winds.CORE2()
+            cr.load(self.tvec.min(), self.tvec.max())
+            self.crwnd = np.zeros(self.tvec.shape + self.llon.shape)
+            for tpos in np.arange(len(self.tvec)):
+                try:
+                    self.crwnd[tpos,:,:] = self.reproject(cr, cr.nwnd[tpos,:,:])
+                except IndexError:
+                    self.crwnd[tpos,:,:] = self.reproject(cr, cr.nwnd[-1,:,:])
             return
-
+        
         key = self.keypref + self.pa[par]
         self.par=par; vd=self.vd;
         t1 = self.t1; t2 = self.t2
@@ -252,16 +248,16 @@ class Tpz(base.Grid):
         k1 = self.k1; k2 = self.k2        
         if not t1: t1 = 0
         if not t2: t2 = self.tvec.shape[0]
-        n = pycdf.CDF(vd[key][5])
+        n = netcdf_file(vd[key][2])
 
         if par == 'nwnd':
-            fld = self.utcgrid(scale(n.var(vd[key][0])[t1:t2,...]))
+            fld = self.gmt.field(scale(n.variables[vd[key][0]][:])[t1:t2,...])
             fld = fld#[:,i1:i2,j1:j2]
             fld[fld <-1e9] = np.nan
             fld[fld > 1e9] = np.nan
             self.__dict__[par] = fld.astype(np.float32)
             return  
-        if  'zt_ocean' in vd[key][1] and mldint:
+        if  'zt_ocean' in vd[key][1].dimensions and mldint:
             """ Integrate down to MLD """
             na = np.newaxis
             exists = False
@@ -272,7 +268,7 @@ class Tpz(base.Grid):
             par = par[:-1] + 'm'
             self.fields[-1] = par
 
-        elif  'zt_ocean' in vd[key][1] and fullint:
+        elif  'zt_ocean' in vd[key][1].dimensions and fullint:
             """ Integrate over each column """
             na = np.newaxis
             exists = False
@@ -286,12 +282,12 @@ class Tpz(base.Grid):
             par = par[:-1] + 'f'
             self.fields[-1] = par
 
-        elif 'zt_ocean' in vd[key][1] and surf:
-            fld = self.gmt.field(scale(n.var(vd[key][0])[t1:t2,0,    j1:j2,:]))
-        elif 'zt_ocean' in vd[key][1]:
-            fld = self.gmt.field(scale(n.var(vd[key][0])[t1:t2,k1:k2,j1:j2,:]))
+        elif 'zt_ocean' in vd[key][1].dimensions and surf:
+            fld = self.gmt.field(scale(n.variables[vd[key][0]][t1:t2,0,    j1:j2,:]))
+        elif 'zt_ocean' in vd[key][1].dimensions:
+            fld = self.gmt.field(scale(n.variables[vd[key][0]][t1:t2,k1:k2,j1:j2,:]))
         else:
-            fld = self.gmt.field(scale(n.var(vd[key][0])[t1:t2,      j1:j2,:]))
+            fld = self.gmt.field(scale(n.variables[vd[key][0]][t1:t2,      j1:j2,:]))
         print par + ": ", fld.shape
         fld[fld <-1e9] = np.nan
         fld[fld > 1e9] = np.nan
@@ -301,36 +297,23 @@ class Tpz(base.Grid):
         baseiso = mpl.dates.date2num(datetime.datetime(1948,1,1))
         return baseiso + t - 1
 
-    def utcgrid(self, fld):
-        """
-        if hasattr(self,'par') and self.par == "nwnd":
-            fld = self.scl(fld)
-        elif fld.shape[-1]!=360:
-            pass
-        else:
-            wstfld=fld[...,:100].copy()
-            fld[...,:260] = fld[...,100:]
-            fld[...,260:] = wstfld
-            del wstfld
-        return fld
-        """
     def create_pardict(self,lnmsk='',dtmsk=''):
         vardict = {}
         for f in glob.glob(self.datadir + "/*/*.nc"):
             if not "month" in f:
-                n = pycdf.CDF(f)
-                for k in n.variables().keys():
+                n = Dataset(f)
+                for k in n.variables.keys():
                     ln,dt = f.split('/')[-2].split('_')
                     if  ( (ln==lnmsk or lnmsk=='') and
                           (dt==dtmsk or dtmsk=='') ): 
                         fld_index = dt + "_" + ln + "_" + k
-                        vardict[fld_index] = ( (k,) + n.variables()[k]
+                        vardict[fld_index] = ( (k,) + (n.variables[k],)
                                                + (f,) + (ln,)+(dt,) )
         self.vd = vardict
     
     def attr(self,key):
-        n = pycdf.CDF(self.vd[key][5])
-        at = n.var(self.vd[key][0])
+        n = netcdf_file(self.vd[key][2])
+        at = n.variables[self.vd[key][0]]
         return at.attributes()
 
     def scl(self,a):
@@ -339,7 +322,7 @@ class Tpz(base.Grid):
         llon = np.ravel(f['llon'])
         def imr(a):
             return griddata(llat, llon, np.ravel(a),
-                            self.llat, self.llon)
+                            self.llat, self.llon, interp='linear' )
         if a.ndim > 2 :
             b = np.zeros((a.shape[-3],len(self.lat),len(self.lon)))
             for t in np.arange(a.shape[-3]):
