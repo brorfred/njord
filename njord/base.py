@@ -13,7 +13,11 @@ from scipy.stats import nanmedian
 
 import requests
 import gmtgrid
-import projmap
+try:
+    import projmap
+    USE_BASEMAP = True
+except:
+    USE_BASEMAP = False
 try:
     import figpref
     USE_FIGPREF = True
@@ -344,7 +348,7 @@ class Grid(object):
         self.load(field, **kwargs)
         return self.__dict__[field]
 
-    def retrive_file(self, url, local_filename):
+    def retrive_file(self, url, local_filename=None, params=None):
         """Retrive file from remote server via http"""
         spliturl = urlparse.urlsplit(url)
         if spliturl.scheme == "ftp":
@@ -355,14 +359,17 @@ class Grid(object):
                            open(local_filename, 'wb').write)
             ftp.quit()
         else:
-            r = requests.get(url, stream=True)
+            r = requests.get(url, params=params, stream=True)
             if r.ok:
-                with open(local_filename, 'wb') as f:
-                    for chunk in r.iter_content(chunk_size=1024): 
-                        if chunk: # filter out keep-alive new chunks
-                            f.write(chunk)
-                            f.flush()
-                return True
+                if local_filename is None:
+                    return r.text
+                else:
+                    with open(local_filename, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=1024): 
+                            if chunk: # filter out keep-alive new chunks
+                                f.write(chunk)
+                                f.flush()
+                    return True
             else:
                 warnings.warn("Could not download file from server")
                 return False
@@ -435,12 +442,14 @@ class Grid(object):
     @property
     def mp(self, **kwargs):
         """Return a projmap instance as defined by self.map_region"""
-        if not 'mp' in self.__dict__.keys():
-            self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
-        if self.__dict__['mp'].region != self.map_region:
-            self.__dict__['mp'] = projmap.Projmap(self.map_region)
-        return self.__dict__['mp']
-
+        if USE_BASEMAP:
+            if not 'mp' in self.__dict__.keys():
+                self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
+            if self.__dict__['mp'].region != self.map_region:
+                self.__dict__['mp'] = projmap.Projmap(self.map_region)
+            return self.__dict__['mp']
+        else:
+            raise ImportError, "Basemap not installed. Learn more at http://matplotlib.org/basemap/"
     def pcolor(self,fld, **kwargs):
         """Make a pcolor-plot of field"""
         if USE_FIGPREF: figpref.current()

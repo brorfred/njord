@@ -9,23 +9,12 @@ from scipy.io import netcdf_file
 
 import base
 import gmtgrid
-import reuerflux
-import bln
-
-
-class Winds(object):
-    """ Meta class for winds """
-    def timeseries(self, jd1,jd2,i,j):
-        """Generate a timeserie for a gridcell"""
-        vec = np.array([self.load(jd)[i,j] for jd in np.arange(jd1,jd2+1)])
-        return vec    
+try:
+    import bln
+    HAS_BLN= True
+except:
+    HAS_BLN= False
     
-    def setup_grid(self):
-        self.lat,self.lon = bln.grid()
-        self.llon,self.llat = np.meshgrid(self.lon,self.lat)
-
-
-
 class Seawinds(base.Grid):
     """Read jpl Seawinds fields"""
     def __init__(self, **kwargs):
@@ -56,16 +45,16 @@ class Seawinds(base.Grid):
         else:
             raise IOError, 'Error opening %s' % self.datadir + filename1
             raise IOError, 'Error opening %s' % self.datadir + filename2
-	u = nc.variables['u'][:].copy()
+        u = nc.variables['u'][:].copy()
         v = nc.variables['v'][:].copy()
-	u[u<-999] = np.nan
-	v[v<-999] = np.nan
-	if (fld=="u") | (fld=="uvel"):
-	    self.uvel = self.gmt.field(np.squeeze(u))
-	elif (fld=="v") | (fld=="vvel"):
-	    self.vvel = self.gmt.field(np.squeeze(v))
-	else:
-   	    self.nwnd = self.gmt.field(np.squeeze(np.sqrt(u**2 + v**2)))
+        u[u<-999] = np.nan
+        v[v<-999] = np.nan
+        if (fld=="u") | (fld=="uvel"):
+            self.uvel = self.gmt.field(np.squeeze(u))
+        elif (fld=="v") | (fld=="vvel"):
+            self.vvel = self.gmt.field(np.squeeze(v))
+        else:
+            self.nwnd = self.gmt.field(np.squeeze(np.sqrt(u**2 + v**2)))
 
 
 
@@ -156,6 +145,8 @@ class ncep:
 class Quikscat(base.Grid):
     
     def __init__(self, **kwargs):
+        if not HAS_BLN:
+            raise ImportError, "The bln module is missing."
         super(Quikscat, self).__init__(**kwargs)
 
     def setup_grid(self):
