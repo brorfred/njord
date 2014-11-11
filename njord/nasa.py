@@ -285,7 +285,11 @@ class Base(base.Grid):
         """Unzip file if exists and and is a valid bzip2 file"""
         if not os.path.isfile(self.filename):
             self.vprint( "Uncompressing file")
-            err = sbp.call([ZIPCMD, "-d", zipfname])
+            try:
+                err = sbp.call([ZIPCMD, "-d", zipfname])
+            except OSError as det:
+                raise OSError, "Error when unzipping %s: %s" % (zipfname,det)
+                
             if err == 1:
                 print "Decompression of " + zipfname + " failed."
                 print "Trying to download again"
