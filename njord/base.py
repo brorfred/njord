@@ -66,11 +66,13 @@ class Grid(object):
                 self.__dict__[key] = val
             
         for key,val in cfg.items(self.projname):
+            if type(val) is str and "~/" in val:
+                val = os.path.expanduser(val)
             try:
                 splitkey(key, json.loads(val))
             except ValueError:
                 splitkey(key, val)
-
+                
     def _llboundaries_to_ij(self):
         """Calculate i1,i2,j1,j2 from lat and lon"""
         if 'ijarea' in self.inkwargs.keys():
