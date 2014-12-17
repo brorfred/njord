@@ -31,6 +31,8 @@ class Tpz(base.Grid):
     def __init__(self, **kwargs):
         """Init the class and setup the grid. Paths are defined here."""
         super(Tpz, self).__init__(**kwargs)
+        self.lat = self.lat[self.j1:self.j2].copy()
+        self.lon = self.lon[self.i1:self.i2].copy()
         self.create_pardict(lnmsk='', dtmsk='')
         self.keypref = '1d_1yr_'
 
@@ -44,8 +46,8 @@ class Tpz(base.Grid):
         g = netcdf_file(self.gridfile)
 
         self.gmt = gmtgrid.Shift(g.variables['gridlon_t'][:].copy())
-        self.lon = (self.gmt.lonvec).astype(np.float32)
-        self.lat   = g.variables['gridlat_t'][:]
+        self.lon = (self.gmt.lonvec).astype(np.float32).copy()
+        self.lat   = g.variables['gridlat_t'][:].copy()
         self.depth = self.gmt.field(g.variables['depth_t'][:])
         self.dxt   = self.gmt.field(g.variables['dxt'][:])
         self.dyt   = self.gmt.field(g.variables['dyt'][:])

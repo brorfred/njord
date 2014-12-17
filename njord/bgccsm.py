@@ -48,7 +48,7 @@ class CSM(base.Grid):
         self.llon = self.readfield(n, 'TLONG')[i1:i2,j1:j2]
         self.llon[self.llon>180] = self.llon[self.llon>180] - 360
         self.lat = self.llat[:,0]
-        self.lon = self.llon[0,:]
+        self.lon = self.gmt.lonvec
         
         self.dz   = n.variables['dz'][:] / 100 
         self.dzt  = self.dz.copy()
@@ -101,6 +101,7 @@ class CSM(base.Grid):
                    'diatChl': ('diatChl',1),
                    'diazChl': ('diazChl',1),
                    'pars': ('PAR_avg',1),
+                   'feco': ('Fe',1),
                    'o2st':('',1),
                    'arst':('',1),
                    'o2ar':('',1),
@@ -197,7 +198,8 @@ class CSM(base.Grid):
                 fld = getattr(self, par)
             kvec = np.arange(self.km)
             fld[(kvec[na,:,na,na] > self.mldk[:,na,:,:])] = np.nan
-            setattr(self, par[:-1] + 'm', np.nansum(fld, axis=1))
+            setattr(self, par[:-1] + 'm',
+                    np.nansum(self.zlev[na,:,na,na] * fld, axis=1))
             del fld
             return
             """
