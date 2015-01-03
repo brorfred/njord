@@ -1,5 +1,6 @@
 import os.path
 from datetime import datetime as dtm
+import ftplib
 
 import scipy
 import numpy as np
@@ -23,6 +24,8 @@ class Seawinds(base.Grid):
 	
     def setup_grid(self):
 	"""Setup lat-lon matrices for Seawinds"""
+        if not os.path.isfile(self.gridfile):
+            self.retrive_file(self.dataurl, self.gridfile)
         try:
             n = netcdf_file(self.gridfile, 'r')
         except:
@@ -36,15 +39,28 @@ class Seawinds(base.Grid):
     def load(self, fld="nwnd", **kwargs):
 	"""Load field for a given julian date. Returns u,v, or nwnd(windnorm)"""
         self._timeparams(**kwargs)
-        filename1 = "uv%04i%02i%02i.nc"   % (self.yr, self.mn, self.dy)
-        filename2 = "uv%04i%02i%02irt.nc" % (self.yr, self.mn, self.dy)
-        if os.path.isfile(self.datadir + filename1):
-            nc = netcdf_file(self.datadir + filename1)
-        elif os.path.isfile(self.datadir + filename2):
-            nc = netcdf_file(self.datadir + filename2)
-        else:
-            raise IOError, 'Error opening %s' % self.datadir + filename1
-            raise IOError, 'Error opening %s' % self.datadir + filename2
+        filename = os.path.join(self.datadir,
+                            "uv%04i%02i%02i.nc" % (self.yr, self.mn, self.dy))
+        if not os.path.isfile(filename):
+            self.download(filename)
+        try:
+            nc = netcdf_file(filename)
+        except TypeError:
+            os.remove(filename)
+            self.download(filename)
+            try:
+                nc = netcdf_file(filename)
+            except:
+                filename = filename.rstrip(".nc") + "rt.nc"
+                if not os.path.isfile(filename):
+                    self.download(filename)
+                try:
+                    nc = netcdf_file(filename)
+                except TypeError:
+                    os.remove(filename)
+                    self.download(filename)
+                    nc = netcdf_file(filename)
+                    
         u = nc.variables['u'][:].copy()
         v = nc.variables['v'][:].copy()
         u[u<-999] = np.nan
@@ -56,6 +72,11 @@ class Seawinds(base.Grid):
         else:
             self.nwnd = self.gmt.field(np.squeeze(np.sqrt(u**2 + v**2)))
 
+    def download(self, filename):
+        try:
+            self.retrive_file(self.dataurl, filename)
+        except ftplib.error_perm:
+            return False
 
 
 class CCMP(base.Grid):
