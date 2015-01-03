@@ -1,4 +1,5 @@
 import os, os.path
+import glob
 import subprocess as sbp
 from datetime import datetime as dtm
 import urllib
@@ -70,15 +71,18 @@ class Base(base.Grid):
 										self.vc[fld][0], self.res[0],
                                         self.vc[fld][1]))
 
-    def refresh(self, fld="chl", fldtype="DAY", jd1=None, jd2=None):
+    def refresh(self, fld="chl", fldtype="DAY", jd1=None, jd2=None, delall=False):
         """ Read a L3 mapped file and add field to current instance"""
         jd1 = pl.datestr2num('2003-01-01') if jd1 is None else jd1
         jd2 = int(pl.date2num(dtm.now())) - 1  if jd2 is None else jd2
         for jd in np.arange(jd1, jd2):
+            print " --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d')
             filename = os.path.join(self.datadir,
                                     self.generate_filename(jd,fld,fldtype))
-
-            print " --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d')
+            if delall:
+                for fn in glob.glob(filename + "*"):
+                    print "Deleted %s" % fn
+                    os.remove(fn)
             print "Checking %s" % filename + '.npz'
             if not os.path.isfile(filename + '.npz'):
                 try:
