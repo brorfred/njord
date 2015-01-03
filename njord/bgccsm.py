@@ -44,17 +44,17 @@ class CSM(base.Grid):
 
         self.fname = os.path.split(fname)[1]
         self.gmt = gmtgrid.Shift(g.variables['TLONG'][0,:])
-        self.llat = self.readfield(n,  'TLAT')[i1:i2,j1:j2]
-        self.llon = self.readfield(n, 'TLONG')[i1:i2,j1:j2]
+        self.llat = self.readfield(n,  'TLAT')[j1:j2,i1:i2]
+        self.llon = self.readfield(n, 'TLONG')[j1:j2,i1:i2]
         self.llon[self.llon>180] = self.llon[self.llon>180] - 360
         self.lat = self.llat[:,0]
         self.lon = self.gmt.lonvec
         
         self.dz   = n.variables['dz'][:] / 100 
         self.dzt  = self.dz.copy()
-        self.dyu  = self.gmt.field(g.variables['DYU'][:]/100)[i1:i2,j1:j2] 
-        self.dxu  = self.gmt.field(g.variables['DXU'][:]/100)[i1:i2,j1:j2] 
-        self.area = self.gmt.field(n.variables['TAREA'][:]/100/100)[i1:i2,j1:j2]
+        self.dyu  = self.gmt.field(g.variables['DYU'][:]/100)[j1:j2,i1:i2] 
+        self.dxu  = self.gmt.field(g.variables['DXU'][:]/100)[j1:j2,i1:i2] 
+        self.area = self.gmt.field(n.variables['TAREA'][:]/100/100)[j1:j2,i1:i2]
         self.zlev = n.variables['z_t'][:] /100
         self.create_tvec()
 
@@ -64,8 +64,8 @@ class CSM(base.Grid):
             
 
         self.t1 = lim(t1,0); self.t2 = lim(t2,len(self.tvec))
-        self.i1 = lim(i1,0); self.i2 = lim(i2,self.llat.shape[0])
-        self.j1 = lim(j1,0); self.j2 = lim(j2,self.llat.shape[1])
+        self.i1 = lim(i1,0); self.i2 = lim(i2,self.llat.shape[1])
+        self.j1 = lim(j1,0); self.j2 = lim(j2,self.llat.shape[0])
         self.k1 = lim(k1,0); self.k2 = lim(k2,len(self.zlev))
 
 
@@ -171,7 +171,7 @@ class CSM(base.Grid):
                 for m in np.arange(1,13):
                     n = Dataset(pref + "%04i-%02i.nc" % (y,m) )
                     tmpfld = self.gmt.field(
-                        n.variables[self.pa[par][0]][:])[...,i1:i2,j1:j2]
+                        n.variables[self.pa[par][0]][:])[...,j1:j2,i1:i2]
                     try:
                         fld = np.concatenate((fld,tmpfld),axis=0)
                     except UnboundLocalError:
@@ -239,7 +239,7 @@ class CSM(base.Grid):
             pref = (self.datadir +
                     "/BEC.gx3.22.pi.cv2.Ar.daily.IFRAC.1999-2006.nc")
             n = Dataset(pref)
-            self.icef = self.gmt.field(n.variables['IFRAC'][t1:t2,...])[:,i1:,j1:j2]
+            self.icef = self.gmt.field(n.variables['IFRAC'][t1:t2,...])[:,j1:,i1:i2]
             self.icef[self.icef>1] = np.nan
             return
         
@@ -273,10 +273,10 @@ class CSM(base.Grid):
                               wtlen=60,
                               o2st=self.o2st,
                               dens=self.dens)
-            ii2= min(i2,26)
-            if i1<26:
-                self.wwfl[:,i1:ii2,:] = ( (1- self.icef[:,i1:ii2,:]) *
-                                          self.wwfl[:,i1:ii2,:] )
+            jj2= min(j2,26)
+            if j1<26:
+                self.wwfl[:,j1:jj2,:] = ( (1- self.icef[:,j1:jj2,:]) *
+                                          self.wwfl[:,j1:jj2,:] )
             return
         elif par == 'crwwfl':
             condload( ('wwfl',) )
@@ -376,15 +376,6 @@ class CSM(base.Grid):
     def __call__(self):
         for v in self.params:
             print v
-
-            
-
-
-
-
-
-
-    #Massbalances
     
     def volflux (self, cncfld):
         # === Create u and v fluxes over the cell bundaries ===
@@ -430,24 +421,3 @@ class CSM(base.Grid):
         else:
             raise('Region not set')
 
-    def add_ij(self):
-        self.jmat,self.imat = np.meshgrid(np.arange(self.j2-self.j1),
-                                          np.arange(self.i2-self.i1))
-        self.ijvec = np.vstack((np.ravel(self.imat),np.ravel(self.jmat))).T
-    def add_kd(self,mask=None):
-        from scipy.spatial import KDTree, cKDTree
-
-        latvec = np.ravel(self.llat)
-        lonvec = np.ravel(self.llon)
-        if not mask is None: 
-            latvec = latvec[~np.isnan(np.ravel(mask))]
-            lonvec = lonvec[~np.isnan(np.ravel(mask))]
-            self.add_ij()
-            self.ijvec = self.ijvec[~np.isnan(np.ravel(mask))]
-        self.kd = cKDTree(list(np.vstack((lonvec,latvec)).T))
-    def ll2ij(self,lon,lat,nei=1):
-        if not hasattr(self,'imat'):
-            self.add_kd()
-            self.add_ij()
-        dist,ij = self.kd.query(list(np.vstack((lon,lat)).T),nei)
-        return self.ijvec[ij-1][:,0],self.ijvec[ij-1][:,1]

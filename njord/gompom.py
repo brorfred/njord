@@ -18,42 +18,32 @@ class Casco(base.Grid):
 
     def setup_grid(self):
         gc = netcdf_file(self.gridfile)
-        self.llat = gc.variables['y'][:]
-        self.llon = gc.variables['x'][:]
+        self.llat = gc.variables['y'][:].copy()
+        self.llon = gc.variables['x'][:].copy()
         self.depth = gc.variables['depth'][:].copy()
         self.depth[self.depth<0] = np.nan
         
-    def load(self,field,jd=0,yr=0,mn=1,dy=1):
+    def load(self,field,**kwargs):
         """ Load casco fields for a given day"""
         self.last_loaded_feld = field
-        i1=self.i1; i2=self.i2; j1=self.j1; j2=self.j2
-        if jd!=0:
-            yr = pl.num2date(jd).year
-            mn = pl.num2date(jd).month
-            dy = pl.num2date(jd).day
-            t  = int(np.floor(np.modf(jd)[0]*8))
-            print jd,t
-        elif yr!=0:
-            jd = pl.date2num(yr,mn,dy)
-            md  = jd - pl.date2num(dtm(1992,10,05))
-        filename ="/casco.%04i%02i%02i.cdf" % (yr,mn,dy)
-        print filename
-        nc = netcdf_file(self.datadir + filename)        
+        self._timeparams(**kwargs)        
+        t  = int(np.floor(np.modf(self.jd)[0]*8))
+        filename = ps.path.join(self.datadir,
+                             "casco.%04i%02i%02i.cdf" (self.yr,self.mn,self.dy)
+        nc = netcdf_file(filename)        
 
         if field == 'uv':
-            self.load('u',jd,yr,mn,dy)
-            self.load('v',jd,yr,mn,dy)
+            self.load('u', self.jd)
+            self.load('v', self.jd)
             ang = nc.var('ang')[:] / 180 * np.pi
             uu = ( self.u * np.cos(ang) + self.v * np.sin(ang) ) 
             self.v = (-self.u * np.sin(ang) + self.v * np.cos(ang) )
             self.u = uu
         else:
-            var = nc.variables[field][:]
-            fld = (var[t,i1:i2,j1:j2]).astype(np.float)
+            var = nc.variables[field]
+            fld = var[t, self.i1:self.i2, self.j1:self.j2].astype(np.float)
             fld[fld==self.missing[field]] = np.nan
-            self.__dict__[field] = (fld *
-                                    var.attributes()['scale_factor'] +
-                                    var.attributes()['add_offset'] )
+            setattr(self, field, fld * var.scale_factor + var.add_offset)
             return
  
 

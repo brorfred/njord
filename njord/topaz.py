@@ -57,7 +57,7 @@ class Tpz(base.Grid):
         #self.zlev  = self.gmt.field(g.variables['dz_t'][:])
         #if not hasattr(self, 'k1'): self.k1 = 0
         #if not hasattr(self, 'k2'): self.k2 = len(self.zlev)
-        #self.dz    =  g.variables('dz_t')[self.k1:self.k2,25,30]
+        self.dz    =  g.variables['dz_t'][self.k1:self.k2,25,30]
         #self.vol = ( self.dxt[np.newaxis,...] * 
         #             self.dyt[np.newaxis,...]*self.dzt)
         #self.vol[self.vol<0] = np.nan
@@ -159,11 +159,12 @@ class Tpz(base.Grid):
             self.fields[-1] = 'wwfl'
             tm = len(self.tvec)
             tvec = self.tvec
-            self.tvec = np.arange(self.tvec.min()-61,self.tvec.min())
+            self.tvec = np.arange(self.tvec.min()-60,self.tvec.min())
             self.load('crwnd')
             self.tvec = tvec
             self.condload( ('nwnd','o2ar','dens','mldp') )
             self.nwnd = np.concatenate((self.crwnd,self.nwnd),axis=0)
+            print self.nwnd.shape
             fillmat = np.zeros( (self.crwnd.shape[0],) + self.o2ar.shape[1:] )
             for v in ['o2ar','temp','o2st','dens','mldp']:
                 self.__dict__[v] = np.concatenate(
@@ -253,8 +254,9 @@ class Tpz(base.Grid):
         n = netcdf_file(vd[key][2])
 
         if par == 'nwnd':
-            fld = self.gmt.field(scale(n.variables[vd[key][0]][:])[t1:t2,...])
-            fld = fld#[:,i1:i2,j1:j2]
+            wnfld = self.scl(scale(n.variables[vd[key][0]][:]))
+            print wnfld.shape
+            fld = self.gmt.field(wnfld[t1:t2,...])[:,j1:j2,i1:i2]
             fld[fld <-1e9] = np.nan
             fld[fld > 1e9] = np.nan
             self.__dict__[par] = fld.astype(np.float32)
@@ -318,19 +320,19 @@ class Tpz(base.Grid):
         at = n.variables[self.vd[key][0]]
         return at.attributes()
 
-    def scl(self,a):
-        f = np.load('result/windlatlon.npz')
+    def scl(self, arr):
+        f = np.load(self.datadir + '/windlatlon.npz')
         llat = np.ravel(f['llat'])
         llon = np.ravel(f['llon'])
-        def imr(a):
-            return griddata(llat, llon, np.ravel(a),
+        def imr(arr):
+            return griddata(llat, llon, np.ravel(arr),
                             self.llat, self.llon, interp='linear' )
-        if a.ndim > 2 :
-            b = np.zeros((a.shape[-3],len(self.lat),len(self.lon)))
-            for t in np.arange(a.shape[-3]):
-                b[t,:,:]=imr(a[t,:,:])
+        if arr.ndim > 2 :
+            b = np.zeros((arr.shape[-3],len(self.lat),len(self.lon)))
+            for t in np.arange(arr.shape[-3]):
+                b[t,:,:]=imr(arr[t,:,:])
         else:
-            b = imr(a)
+            b = imr(arr)
         return b
 
     def add_year(self):
