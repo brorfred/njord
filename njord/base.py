@@ -293,7 +293,6 @@ class Grid(object):
         self.nj_ivec,self.nj_jvec = self.ll2ij(lonvec[self.nj_mask],
                                                latvec[self.nj_mask])
 
-        
     def reproject(self, nj_obj, field):
         """Reproject a field of another njord inst. to the current grid"""
         if not hasattr(self,'nj_ivec'):
@@ -392,6 +391,9 @@ class Grid(object):
     def timeseries(self, fieldname, jd1, jd2, mask=None):
         """Create a timeseries of fields using mask to select data"""
         mask = mask if mask is not None else self.llat == self.llat
+        jd1 = pl.datestr2num(jd1) if type(jd1) is str else jd1
+        jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
+
         self.tvec = np.arange(jd1, jd2+1)
         field = np.zeros((len(self.tvec),) + self.llat.shape) 
         for n,jd in enumerate(self.tvec):
