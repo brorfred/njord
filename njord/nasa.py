@@ -31,6 +31,8 @@ class Base(base.Grid):
             i1,i2,j1,j2 = (0000 ,4320, 0, 2160)
         elif self.res == "4km":
             i1,i2,j1,j2 = (0000 ,8640, 0, 4320)
+        elif self.res == "1deg":
+            i1,i2,j1,j2 = (0000 ,360, 0, 180)
         incr  = 360.0/i2
         jR    = np.arange(j1, j2)
         iR    = np.arange(i1, i2)
