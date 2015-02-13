@@ -50,7 +50,7 @@ class Cal(base.Grid):
         PV[PV<0] = PV[PV<0]+256
         PV[PV==0]   = np.nan
         PV[PV==255] = np.nan
-        self.__dict__[fldname] = scale(PV)
+        setattr(self, fldname, scale(PV)[self.j1:self.j2, self.i1:self.i2])
 
 
     def download(self, fldname, jd):
