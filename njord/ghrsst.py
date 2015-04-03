@@ -91,7 +91,7 @@ class L4_K10(base.Grid):
         nc = netcdf_file(self.filename)
         field = nc.variables['analysed_sst'][:].astype(np.float)
         field[field<-1000] = np.nan
-        self.sst = np.squeeze(field) / 10.
+        self.sst = (np.squeeze(field) / 10.)[self.j1:self.j2, self.i1:self.i2]
         self._try_to_zip(zipped)
         return True
 
