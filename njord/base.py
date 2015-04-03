@@ -1,6 +1,4 @@
 import os
-import ConfigParser
-import json
 import datetime
 import warnings
 import ftplib
@@ -13,6 +11,9 @@ from scipy.stats import nanmedian
 
 import requests
 import gmtgrid
+
+import config
+
 try:
     import projmap
     USE_BASEMAP = True
@@ -33,55 +34,25 @@ class Grid(object):
         if not hasattr(self, 'projname'):
             self.projname = "%s.%s" % (self.__module__.split(".")[-1],
                                        type(self).__name__)
-        self.basedir =  os.path.dirname(os.path.abspath(__file__))
-        self.inkwargs = kwargs
-        self._load_presets('njord',kwargs)
-        for key,val in kwargs.items():
+
+        preset_dict = config.load('njord', self.projname, kwargs)
+        for key,val in preset_dict.items():
             setattr(self, key, val)
+            
         if not os.path.isdir(self.datadir):
             os.makedirs(self.datadir)
         self.setup_grid()
         self._set_maxmin_ij()
-
-    def _load_presets(self, filepref, kwargs):
-        """Read and parse the config file"""
-        cfg = ConfigParser.ConfigParser()
-        files = ["%s/%s.cfg" % (os.curdir, filepref),
-                 "%s/.%s.cfg" % (os.path.expanduser("~"), filepref),
-                 "%s/%s.cfg" % (self.basedir, filepref)]
-        for fnm in files:
-            cfg.read(fnm)
-            if self.projname in cfg.sections():
-                self.config_file = fnm
-                break
-        else:
-            raise NameError('Project not included in config files')
-        
-        
-        def splitkey(key, val):
-            if key in self.inkwargs.keys():
-                self.__dict__[key] = self.inkwargs[key]
-                del self.inkwargs[key]
-            else:
-                self.__dict__[key] = val
-            
-        for key,val in cfg.items(self.projname):
-            if type(val) is str and "~/" in val:
-                val = os.path.expanduser(val)
-            try:
-                splitkey(key, json.loads(val))
-            except ValueError:
-                splitkey(key, val)
                 
     def _llboundaries_to_ij(self):
         """Calculate i1,i2,j1,j2 from lat and lon"""
-        if 'ijarea' in self.inkwargs.keys():
-            self.i1,self.i2,self.j1,self.j2 = self.inkwargs['ijarea']    
+        if hasattr(self, 'ijarea'):
+            self.i1,self.i2,self.j1,self.j2 = getattr(self, 'ijarea')
         for att,val in zip(['i1', 'i2', 'j1', 'j2'], [0,self.imt,0,self.jmt]): 
             if not hasattr(self,att):
                 self.__dict__[att] = val
-        if 'latlon' in self.inkwargs.keys():
-            self.lon1,self.lon2,self.lat1,self.lat2 = self.inkwargs['latlon']
+        if hasattr(self, 'latlon'):
+            self.lon1,self.lon2,self.lat1,self.lat2 = getattr(self, 'latlon')
         
         lat = self.llat if hasattr(self, 'llat') else self.latvec[:, np.newaxis]
         lon = self.llon if hasattr(self, 'llon') else self.lonvec[np.newaxis, :]
@@ -395,10 +366,13 @@ class Grid(object):
         jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
 
         self.tvec = np.arange(jd1, jd2+1)
-        field = np.zeros((len(self.tvec),) + self.llat.shape) 
+        field = np.zeros((len(self.tvec),) + self.llat.shape, dtype=np.float32)
         for n,jd in enumerate(self.tvec):
             print pl.num2date(jd), pl.num2date(jd2)
-            field[n,:,:] = self.get_field(fieldname, jd=jd)
+            try:
+                field[n,:,:] = self.get_field(fieldname, jd=jd).astype(np.float32)
+            except KeyError:
+                field[n,:,:] = np.nan
             field[n, ~mask] = np.nan
         setattr(self, fieldname + 't', field)
 
