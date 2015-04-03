@@ -5,6 +5,7 @@ from datetime import datetime as dtm
 import urllib
 import urllib2
 import re
+from distutils import spawn
 
 import numpy as np
 import pylab as pl
@@ -13,7 +14,12 @@ from pyhdf.SD import SD, SDC
 import base
 from utils import yrday
 
-ZIPCMD = "pbzip2"
+if spawn.find_executable("pbzip2"):
+    ZIPCMD = "pbzip2"
+elif spawn.find_executable("bzip2"):
+    ZIPCMD = "bzip2"
+else:
+    raise IOError, "Couldn't find a bzip2 executable. Needed to unzip files"
 
 class Base(base.Grid):
 
