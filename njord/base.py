@@ -344,7 +344,7 @@ class Grid(object):
                            open(local_filename, 'wb').write)
             ftp.quit()
         else:
-            print "downloading\n%s\nto\n%" % (url, local_filename)
+            print "downloading\n %s \nto\n %s" % (url, local_filename)
             r = requests.get(url, params=params, stream=True)
             if r.ok:
                 if local_filename is None:
