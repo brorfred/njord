@@ -93,7 +93,10 @@ class Grid(object):
         """Calculate time parameters from given values"""
         for key in kwargs.keys():
             self.__dict__[key] = kwargs[key]
-        if ('yd' in kwargs) & ('yr' in kwargs):
+        if "date" in kwargs:
+            self.jd = pl.datestr2num(kwargs['date'])
+            self.jd = int(self.jd) if self.jd == int(self.jd) else self.jd
+        elif ('yd' in kwargs) & ('yr' in kwargs):
             if self.yd < 1:
                 self.yr = self.yr -1
                 ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
@@ -114,6 +117,15 @@ class Grid(object):
             self.jd = int(self.jd) + ddlist[ddpos]
         self._jd_to_dtm()
 
+    @property
+    def datestr(self):
+        jd = getattr(self, "jd", self.defaultjd)
+        if type(jd) is int:
+            return pl.num2date(jd).strftime("%Y-%m-%d")
+        else:
+            return pl.num2date(jd).strftime("%Y-%m-%d %H:%M")
+    
+        
     def _jd_to_dtm(self):
         dtobj = pl.num2date(self.jd)
         njattrlist = ['yr',  'mn',   'dy', 'hr',  'min',    'sec']
@@ -322,6 +334,7 @@ class Grid(object):
 
     def retrive_file(self, url, local_filename=None, params=None):
         """Retrive file from remote server via http"""
+        print "kalle"
         spliturl = urlparse.urlsplit(url)
         if spliturl.scheme == "ftp":
             ftp = ftplib.FTP(spliturl.netloc) 
@@ -331,6 +344,7 @@ class Grid(object):
                            open(local_filename, 'wb').write)
             ftp.quit()
         else:
+            print "downloading\n%s\nto\n%" % (url, local_filename)
             r = requests.get(url, params=params, stream=True)
             if r.ok:
                 if local_filename is None:
@@ -428,18 +442,24 @@ class Grid(object):
             return self.__dict__['mp']
         else:
             raise ImportError, "Basemap not installed. Learn more at http://matplotlib.org/basemap/"
-    def pcolor(self,fld, **kwargs):
+        
+    def pcolor(self, fld, title=None, colorbar=False, **kwargs):
         """Make a pcolor-plot of field"""
         if USE_FIGPREF: figpref.current()
         if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
         if type(fld) == str:
-            field = self.__dict__[fld]
+            field = getattr(self, fld)
         else:
             field = fld
         x,y = self.mp(self.llon, self.llat)
         self.mp.pcolormesh(x,y,miv(field), **kwargs)
         self.mp.nice()
+        if title is not None:
+            pl.title(title)        
+        if colorbar:
+            self.mp.colorbar()
+
 
     def contour(self,fld, *args, **kwargs):
         """Make a pcolor-plot of field"""

@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pylab as pl
 from scipy.io import netcdf_file, netcdf_variable
+from pydap.client import open_url
 
 import requests
 import base
@@ -43,25 +44,33 @@ class Rutgers(base.Grid):
         """ Load velocity fields for a given day"""
         self._timeparams(**kwargs)
         if fldname == "uv":
-            self.load('u',jd=jd, yr=yr, mn=mn, dy=dy, hr=hr)
-            self.load('v',jd=jd, yr=yr, mn=mn, dy=dy, hr=hr)
+            self.load('u',**kwargs)
+            self.load('v',**kwargs)
             self.uv = np.sqrt(self.u[:,1:,:]**2 + self.v[:,:,1:]**2)
             return
         
-        filename = self.jd2filename(self.jd)
-        if not os.path.isfile(filename):
-            url = urlparse.urljoin(self.dataurl, os.path.basename(filename))
-            print url
-            print filename
-            self.retrive_file(url, filename)
-        with netcdf_file(filename) as nc:
-            fld =  np.squeeze(nc.variables[fldname][:]).copy()
-            fld[fld>9999] = np.nan
-            self.__dict__[fldname] = fld
-            self.ssh =  np.squeeze(nc.variables['zeta'][:])
-            self.zlev = ((self.depth + self.ssh)[np.newaxis,:,:] *
-                          self.Cs_r[:,np.newaxis,np.newaxis])
+        if self.opendap:
+            tpos = int(self.jd) - 714800
+            k1   = kwargs.get("k1", getattr(self, "k1", self.klev)) 
+            k2   = kwargs.get("k2", getattr(self, "k2", k1+1))
+            dapH = open_url(self.dapurl)
+            fld  = dapH[fldname][tpos,k1:k2,self.j1:self.j2,self.i1:self.i2] 
+        else:
+            filename = self.jd2filename(self.jd)
+            if not os.path.isfile(filename):
+                print "File missing"
+                url = urlparse.urljoin(self.dataurl, os.path.basename(filename))
+                self.retrive_file(url, filename)
+            with netcdf_file(filename) as nc:
+                fld =  nc.variables[fldname][:].copy()
+                self.ssh =  np.squeeze(nc.variables['zeta'][:])
+                self.zlev = ((self.depth + self.ssh)[np.newaxis,:,:] *
+                              self.Cs_r[:,np.newaxis,np.newaxis])
+        
+        fld[fld>9999] = np.nan
+        setattr(self, fldname, np.squeeze(fld))
 
+                
 class NWA(Rutgers):
     """Setup North West Atlantic"""
     def __init__(self, **kwargs):
