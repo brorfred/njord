@@ -45,7 +45,7 @@ class Seawinds(base.Grid):
             self.download(filename)
         try:
             nc = netcdf_file(filename)
-        except TypeError:
+        except:
             os.remove(filename)
             self.download(filename)
             try:
