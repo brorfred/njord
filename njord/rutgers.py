@@ -80,20 +80,6 @@ class NWA(Rutgers):
         filename = "nwa_avg_%05i.nc" % (jd - 714782)
         return os.path.join(self.datadir, filename)    
 
-    def download(self, filename):
-        """Download a missing file from Rutger's website"""
-        filename = os.path.basename(filename)
-        uri = ("http://oceanus.esm.rutgers.edu:8080/" +
-               "thredds/fileServer/ROMS/NwA/Run01/Output/Daily/")
-        url = "%s%s" % (uri, filename)
-        try:
-            response = urllib2.urlopen(url)
-        except:
-            raise IOError, "File not found on the server.\n tried %s" % url
-        output = open(os.path.join(self.datadir, filename), 'wb')
-        output.write(response.read())
-        output.close()
-
 class Coral(Rutgers):
     """Setup Indonesial flowthrough"""
     def __init__(self, **kwargs):
