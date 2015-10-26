@@ -18,7 +18,7 @@ def load(filepref, projname, kwargs={}):
             preset_dict['config_file'] = fnm
             break
     else:
-        raise NameError('Project not included in config files')
+        raise NameError('Project ' + projname + ' not included in config files')
         
     def splitkey(key, val):
         if key in kwargs.keys():
