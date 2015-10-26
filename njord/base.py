@@ -9,6 +9,7 @@ import pylab as pl
 from scipy.spatial import cKDTree
 from scipy.stats import nanmedian
 
+from utils import lldist
 import requests
 import gmtgrid
 
@@ -31,10 +32,8 @@ class Grid(object):
     """Base class of njord for lat-lon gridded 2D or 3D data """
     def __init__(self, **kwargs):
         """Initalize an instance based on a config file"""
-        if not hasattr(self, 'projname'):
-            self.projname = "%s.%s" % (self.__module__.split(".")[-1],
-                                       type(self).__name__)
-
+        self.projname = kwargs.get("projname", "%s.%s" % (self.__module__.split(".")[-1],
+                                                          type(self).__name__))
         preset_dict = config.load('njord', self.projname, kwargs)
         for key,val in preset_dict.items():
             setattr(self, key, val)
@@ -116,6 +115,27 @@ class Grid(object):
             ddpos = np.argmin(np.abs(ddlist-dd))
             self.jd = int(self.jd) + ddlist[ddpos]
         self._jd_to_dtm()
+
+
+    def dx_approx(self):
+        dx = self.llon * np.nan
+        for i in xrange(self.jmt):
+            dx[i,1:-1] = lldist.ll2dist2vec(self.llon[i,:-2], self.llat[i,:-2],
+                                            self.llon[i, 2:], self.llat[i, 2:])
+        dx[:, 0] = 2 * dx[:,1]  - dx[:,2]
+        dx[:,-1] = 2 * dx[:,-2] - dx[:,-3]
+        return dx
+
+    def dy_approx(self):
+        dy = self.llat * np.nan
+        for j in xrange(self.imt):
+            dy[1:-1,j] = lldist.ll2dist2vec(self.llon[:-2,j], self.llat[:-2,j],
+                                            self.llon[2:, j], self.llat[2:, j])
+        dy[ 0,:] = 2 * dy[ 1,:] - dy[ 2,:]
+        dy[-1,:] = 2 * dy[-2,:] - dy[-3,:]
+        return dy
+
+    
 
     @property
     def datestr(self):
@@ -334,11 +354,10 @@ class Grid(object):
 
     def retrive_file(self, url, local_filename=None, params=None):
         """Retrive file from remote server via http"""
-        print "kalle"
         spliturl = urlparse.urlsplit(url)
         if spliturl.scheme == "ftp":
             ftp = ftplib.FTP(spliturl.netloc) 
-            ftp.login("anonymous", "njord@bror.us") 
+            ftp.login("anonymous", "njord@bror.us")
             ftp.cwd(spliturl.path)
             ftp.retrbinary("RETR %s" % os.path.basename(local_filename),
                            open(local_filename, 'wb').write)
@@ -458,7 +477,10 @@ class Grid(object):
         if title is not None:
             pl.title(title)        
         if colorbar:
-            self.mp.colorbar()
+            if type(colorbar) is dict:
+                self.mp.colorbar(**colorbar)
+            else:
+                self.mp.colorbar()
 
 
     def contour(self,fld, *args, **kwargs):
