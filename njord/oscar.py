@@ -1,3 +1,6 @@
+import os
+from urlparse import urljoin
+import subprocess as sbp
 from datetime import datetime as dtm
 
 import numpy as np
@@ -12,11 +15,17 @@ from hitta import GBRY
 
 import base
 
+ZIPCMD = "gzip"
+
+
 class Oscar(base.Grid):
     def __init__(self, **kwargs):
         super(Oscar, self).__init__(**kwargs)
 
     def setup_grid(self):
+        print self.dataurl
+        if not os.path.exists(self.gridfile):
+            self.download(self.gridfile)
         gc = netcdf_file(self.gridfile)
         self.lat = gc.variables['latitude'][:]
         self.gmt = gmtgrid.Shift(gc.variables['longitude'][:self.imt].copy())
@@ -27,9 +36,14 @@ class Oscar(base.Grid):
         """ Load Oscar fields for a given day"""
         self._timeparams(**kwargs)
         md  = self.jd - pl.datestr2num('1992-10-05')
-        filename ="/oscar_vel%i.nc" % self.yr
-        filenam2 ="/oscar_vel%i.nc" % (self.yr+1)
-        nc1 = netcdf_file(self.datadir + filename)        
+        filename = os.path.join(self.datadir, "oscar_vel%i.nc" % self.yr)
+        if not os.path.exists(filename):
+            self.download(filename)
+        filenam2 = os.path.join(self.datadir, "oscar_vel%i.nc" % (self.yr+1))
+        if not os.path.exists(filenam2):
+            self.download(filenam2)
+
+        nc1 = netcdf_file(filename)        
         tvec = nc1.variables['time'][:]
         t1 = int(np.nonzero((tvec<=md))[0].max())
         print t1,max(tvec)
@@ -37,7 +51,7 @@ class Oscar(base.Grid):
             nc2 = nc1
             t2 = t1 +1
         else:
-            nc2 = netcdf_file(self.datadir + filenam2)                    
+            nc2 = netcdf_file(filenam2)                    
             t2 = 0
         def readfld(ncvar):
             return self.gmt.field(ncvar[t1, 0,:,:self.imt])[self.j1:self.j2,
@@ -51,6 +65,15 @@ class Oscar(base.Grid):
         self.v = v2*rat + v1*(1-rat)
         print self.jd,md,t1,t2
 
+    def download(self, filename):
+        """Download a missing file from source website"""
+        print "Downloading file from server. This might take several minutes."
+        url = urljoin(self.dataurl, os.path.basename(filename))
+        self.retrive_file(self.dataurl, filename + ".gz")
+        err = sbp.call([ZIPCMD, "-d", filename + ".gz"])
+
+
+        
     def init_nasa(self):
         import nasa
         self.ns = nasa.MODIS(res='9km')
