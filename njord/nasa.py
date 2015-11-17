@@ -6,13 +6,16 @@ import urllib
 import urllib2
 import re
 from distutils import spawn
+import warnings
 
 import numpy as np
 import pylab as pl
 
+from netCDF4 import Dataset
 from pyhdf.SD import SD, SDC
+
 import base
-from utils import yrday
+from njord.utils import yrday
 
 if spawn.find_executable("pbzip2"):
     ZIPCMD = "pbzip2"
@@ -91,7 +94,7 @@ class Base(base.Grid):
                 for fn in glob.glob(filename + "*"):
                     print "Deleted %s" % fn
                     os.remove(fn)
-            print "Checking %s" % filename + '.npz'
+            print "Checking files"
             if not os.path.isfile(filename + '.npz'):
                 try:
                     self.load(fld, fldtype, jd=jd, verbose=True)
@@ -132,7 +135,8 @@ class Base(base.Grid):
             self.dmat1 = self.dmat2
             return
         self.filename = self.generate_filename(self.jd, fld, fldtype)
-        self.vprint( "Filename is %s" % (self.filename))
+        self.vprint( "datadir:        %s" % self.datadir)
+        self.vprint( "filename:       %s" % os.path.basename(self.filename))
         self._l3read(fld,nan=nan)
 
     @property
@@ -195,13 +199,13 @@ class Base(base.Grid):
             l3m_data,base,intercept,slope = self._l3read_npz(fld)
             zipped = False
         else:
-            self.vprint( "Didn't find a npz file.")
+            self.vprint( "No npz file.")
             zipfname = self.filename + '.bz2'
             if not (os.path.isfile(self.filename) | 
                     os.path.isfile(zipfname)):
                 print "File missing, downloading from GSFC"
                 self.download(self.filename)
-            self.vprint( "Found bz2 file: %s" % zipfname)
+            self.vprint( "Found bz2 file: %s" % os.path.basename(zipfname))
             zipped = self._try_to_unzip(zipfname)
             zipped = True
             l3m_data,base,intercept,slope = self._l3read_hdf()
@@ -227,7 +231,6 @@ class Base(base.Grid):
             os.remove(self.filename)
         else:
             self._try_to_zip(zipped)
-
 
     def _l3read_hdf(self, fieldname='l3m_data'):
         self.vprint( "Reading hdf file")

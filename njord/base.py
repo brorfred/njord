@@ -9,7 +9,7 @@ import pylab as pl
 from scipy.spatial import cKDTree
 from scipy.stats import nanmedian
 
-from utils import lldist
+from njord.utils import lldist
 import requests
 import gmtgrid
 
