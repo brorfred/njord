@@ -20,7 +20,7 @@ setup(name = 'njord',
                           "requests>=1.1.0",
                           "Pydap>=3.1",
                           "projmap>=0.5"],
-      packages = ['njord'],
+      packages = ['njord','njord.utils'],
       scripts = ["njord/njordstatus",],
       package_data = {'njord': ['njord.cfg']},
      )
