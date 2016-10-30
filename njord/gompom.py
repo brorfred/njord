@@ -4,8 +4,6 @@ from datetime import datetime as dtm
 import numpy as np
 from scipy.io import netcdf_file
 
-from pyhdf.SD import SD,SDC
-
 import base
 
 class Casco(base.Grid):
@@ -29,7 +27,7 @@ class Casco(base.Grid):
         self._timeparams(**kwargs)        
         t  = int(np.floor(np.modf(self.jd)[0]*8))
         filename = ps.path.join(self.datadir,
-                             "casco.%04i%02i%02i.cdf" (self.yr,self.mn,self.dy)
+                             "casco.%04i%02i%02i.cdf" (self.yr,self.mn,self.dy))
         nc = netcdf_file(filename)        
 
         if field == 'uv':
