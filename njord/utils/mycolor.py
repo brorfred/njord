@@ -123,8 +123,15 @@ unique_colors = ["#000000", "#FFFF00", "#1CE6FF", "#FF34FF",
                  "#C895C5", "#320033", "#FF6832", "#66E1D3",
                  "#CFCDAC", "#D0AC94", "#7ED379", "#012C58"]
 
-def nipy_redend():
-    cdict = {
+
+def reverse_colourmap(cdict):
+    for channel in cdict:
+        arr = np.array(cdict[channel])
+        arr[:,1:] = arr[::-1,1:]
+        cdict[channel] = [tuple(line) for line in arr]
+    return cdict
+
+_nipy_redend_cdict = {
         'red': [(0.0, 0.0, 0.0), (0.05, 0.4667, 0.4667),
                 (0.10, 0.5333, 0.5333), (0.15, 0.0, 0.0),
                 (0.20, 0.0, 0.0), (0.25, 0.0, 0.0),
@@ -158,8 +165,17 @@ def nipy_redend():
                 (0.80, 0.0, 0.0), (0.85, 0.0, 0.0),
                 (0.90, 0.0, 0.0), (0.95, 0.0, 0.0),
                 (1.0, 0.0, 0.0)],
-    }
-    return mpl.colors.LinearSegmentedColormap('nipy_redend', cdict, 256)
+        }
+    
+def nipy_redend():
+    return mpl.colors.LinearSegmentedColormap('nipy_redend',
+                                              _nipy_redend_cdict, 256)
+
+
+def nipy_redend_r():
+    return mpl.colors.LinearSegmentedColormap('nipy_redend_r',
+                                    reverse_colourmap(_nipy_redend_cdict), 256)
+
 
 
 
