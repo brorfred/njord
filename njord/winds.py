@@ -5,7 +5,6 @@ import ftplib
 import scipy
 import numpy as np
 import pylab as pl
-from scipy.stats import nanmean
 from scipy.io import netcdf_file
 
 import base
