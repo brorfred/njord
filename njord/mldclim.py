@@ -3,6 +3,8 @@ climatologies to the njord framework. The resulting field will be stored
 as a attribute in the class instance. The depth  meters.  
 
 """
+import os
+
 import numpy as np
 import pylab as pl
 from scipy.io import netcdf_file
@@ -34,18 +36,19 @@ class Brest(base.Grid):
         """Define lat and lon matrices for njord"""
         gc = netcdf_file(self.gridfile)
         self.lat = gc.variables['lat'][:].copy()
-        lon = gc.variables['lon'][:].copy()
-        lon[lon>360]=lon[lon>360]-360
-        self.lon,self.gr = gmtgrid.config(lon, dim=0)
+        self.gmt = gmtgrid.Shift(gc.variables['lon'][:].copy())
+        self.lon = self.gmt.lonvec         
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
         
     def load(self,mn=1):
         """ Load mixed layer climatology for a given day"""
         self.mn = mn
-        nc = netcdf_file(self.datadir + "/" + self.mldFile)        
-        self.mld = gmtgrid.convert(nc.variables['mld']
-                                   [self.mn-1, self.j1:self.j2,
-                                    self.i1:self.i2],self.gr)
+        fn = os.path.join(self.datadir, self.mldFile)
+        if not os.path.isfile(fn):
+            self.retrive_file(self.cdfurl+"/"+self.mldFile, local_filename=fn)
+        nc = netcdf_file(fn)
+        self.mld = self.gmt.field(nc.variables['mld']
+                                  [self.mn-1, self.j1:self.j2, self.i1:self.i2])
         self.mld[self.mld< 0]=np.nan
         self.mld[self.mld>1e4]=np.nan
 
