@@ -19,6 +19,8 @@ class Glob_025_ll(base.Grid):
                         'salt':'SALT',
                         'temp':'THETA'}
         super(Glob_025_ll, self).__init__(**kwargs)
+        self.k1 = getattr(self, "k1", 0)
+        self.k2 = getattr(self, "k2", self.kmt)
         self.add_mp()
 
     def setup_grid(self):
@@ -41,7 +43,7 @@ class Glob_025_ll(base.Grid):
         if fldname == "uv":
             self.load('uvel', **kwargs)
             self.load('vvel', **kwargs)
-            self.uv = np.sqrt(self.u**2 + self.v**2)/2
+            self.uv = np.sqrt(self.uvel**2 + self.vvel**2)/2
             return
         self._timeparams(**kwargs)
         self.jd = np.round((self.jd+1)/3)*3-1
@@ -57,7 +59,8 @@ class Glob_025_ll(base.Grid):
         fld[fld==0]  = np.nan
         fld[fld<-1e5] = np.nan
 
-        self.__dict__[fldname] = fld[...,self.j1:self.j2, self.i1:self.i2]
+        self.__dict__[fldname] = fld[self.k1:self.k2, self.j1:self.j2,
+                                     self.i1:self.i2]
 
     def download(self,filename, fieldname):
         """Download a missing file from source website"""
