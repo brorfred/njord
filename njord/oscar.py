@@ -10,8 +10,8 @@ from scipy.io import netcdf_file
 
 import projmap
 import gmtgrid
-import figpref
-from hitta import GBRY
+from njord.utils         import figpref
+from njord.utils.mycolor import GBRY
 
 import base
 
@@ -97,10 +97,13 @@ class Oscar(base.Grid):
         fld = fld/cnt
         return fld
 
-    def add_landmask(self):
-        from scipy.stats import nanmean
-        self.load()
-        self.landmask = np.isnan(self.u)
+    @property
+    def landmask(self):
+        if not hasattr(self, "_landmask"):
+            from scipy.stats import nanmean
+            self.load()
+            self._landmask = np.isnan(self.u)
+        return self._landmask
         
     def dchl_dt_time(self):
         i1 = 0
