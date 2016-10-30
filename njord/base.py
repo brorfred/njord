@@ -1,13 +1,20 @@
-import os
+from __future__ import print_function
+
+import os,sys
 import datetime
 import warnings
 import ftplib
 import urlparse
+from datetime import datetime as dtm
 
 import numpy as np
 import pylab as pl
 from scipy.spatial import cKDTree
-from scipy.stats import nanmedian
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+import matplotlib.animation as animation
+
 
 from njord.utils import lldist
 import requests
@@ -25,19 +32,25 @@ try:
     USE_FIGPREF = True
 except:
     USE_FIGPREF = False
+try:
+    import pyresample as pr
+    USE_PYRESAMPLE = True
+except:
+    USE_PYRESAMPLE = False
 
+    
 dtm = datetime.datetime
 
 class Grid(object):
     """Base class of njord for lat-lon gridded 2D or 3D data """
     def __init__(self, **kwargs):
         """Initalize an instance based on a config file"""
-        self.projname = kwargs.get("projname", "%s.%s" % (self.__module__.split(".")[-1],
-                                                          type(self).__name__))
+        self.projname = kwargs.get("projname", "%s.%s" %
+                                   (self.__module__.split(".")[-1],
+                                    type(self).__name__))
         preset_dict = config.load('njord', self.projname, kwargs)
         for key,val in preset_dict.items():
             setattr(self, key, val)
-            
         if not os.path.isdir(self.datadir):
             os.makedirs(self.datadir)
         self.setup_grid()
@@ -73,7 +86,6 @@ class Grid(object):
     @property
     def shape(self):
         return self.llat.shape
-
             
     def _set_maxmin_ij(self):
         """Set a potential sub region of the grid if defined """
@@ -102,7 +114,10 @@ class Grid(object):
                          pl.date2num(dtm(self.yr,  1,  1))) + 1    
                 self.yd = ydmax + self.yd     
             self.jd = self.yd + pl.date2num(dtm(self.yr,1,1)) - 1
-        elif  ('yr' in kwargs) & ('mn' in kwargs) & ('dy' in kwargs):
+        elif  ('yr' in kwargs) & ('mn' in kwargs):
+            if not "dy" in kwargs:
+                kwargs["dy"] = 1
+                setattr(self, "dy", 1)
             self.jd = pl.date2num(dtm(self.yr,self.mn,self.dy))
         elif not 'jd' in kwargs:
             if hasattr(self, 'defaultjd'):
@@ -114,28 +129,45 @@ class Grid(object):
             ddlist = np.array(self.hourlist).astype(float)/24
             ddpos = np.argmin(np.abs(ddlist-dd))
             self.jd = int(self.jd) + ddlist[ddpos]
+        if self.jd < self.fulltvec.min():
+            raise ValueError, "Date before first available model date"
+        if self.jd > self.fulltvec.max():
+            raise ValueError, "Date after last available model date"
         self._jd_to_dtm()
 
 
     def dx_approx(self):
-        dx = self.llon * np.nan
-        for i in xrange(self.jmt):
-            dx[i,1:-1] = lldist.ll2dist2vec(self.llon[i,:-2], self.llat[i,:-2],
-                                            self.llon[i, 2:], self.llat[i, 2:])
-        dx[:, 0] = 2 * dx[:,1]  - dx[:,2]
-        dx[:,-1] = 2 * dx[:,-2] - dx[:,-3]
-        return dx
+        """Caclulate dx from llon and llat"""
+        if not hasattr(self, "_dx_approx"):
+            dx = self.llon * np.nan
+            for i in xrange(self.jmt):
+                latvec1 =  (self.llat[i,0:-2] + self.llat[i,1:-1]) / 2
+                latvec2 =  (self.llat[i,2:]   + self.llat[i,1:-1]) / 2
+                lonvec1 =  (self.llon[i,0:-2] + self.llon[i,1:-1]) / 2
+                lonvec2 =  (self.llon[i,2:]   + self.llon[i,1:-1]) / 2
+                dx[i,1:-1] = lldist.ll2dist2vec(lonvec1, latvec1,
+                                                lonvec2, latvec2)
+            dx[:, 0] = 2 * dx[:,1]  - dx[:,2]
+            dx[:,-1] = 2 * dx[:,-2] - dx[:,-3]
+            self._dx_approx = dx
+        return self._dx_approx
 
     def dy_approx(self):
-        dy = self.llat * np.nan
-        for j in xrange(self.imt):
-            dy[1:-1,j] = lldist.ll2dist2vec(self.llon[:-2,j], self.llat[:-2,j],
-                                            self.llon[2:, j], self.llat[2:, j])
-        dy[ 0,:] = 2 * dy[ 1,:] - dy[ 2,:]
-        dy[-1,:] = 2 * dy[-2,:] - dy[-3,:]
-        return dy
+        """Caclulate dy from llon and llat"""
+        if not hasattr(self, "_dx_approx"):
+            dy = self.llat * np.nan
+            for j in xrange(self.imt):
+                latvec1 =  (self.llat[0:-2,j] + self.llat[1:-1,j]) / 2
+                latvec2 =  (self.llat[2:,j]   + self.llat[1:-1,j]) / 2
+                lonvec1 =  (self.llon[0:-2,j] + self.llon[1:-1,j]) / 2
+                lonvec2 =  (self.llon[2:,j]   + self.llon[1:-1,j]) / 2
+                dy[1:-1,j] = lldist.ll2dist2vec(lonvec1, latvec1,
+                                                lonvec2, latvec2)
+            dy[ 0,:] = 2 * dy[ 1,:] - dy[ 2,:]
+            dy[-1,:] = 2 * dy[-2,:] - dy[-3,:]
+            self._dy_approx = dy
+        return self._dy_approx
 
-    
 
     @property
     def datestr(self):
@@ -168,7 +200,7 @@ class Grid(object):
 
     def vprint(self, string, log_level=None):
         if getattr(self, 'verbose', False) == True:
-            print string
+            print(string)
 
                 
     def add_ij(self):
@@ -219,12 +251,12 @@ class Grid(object):
         if dpos is not None:
             ipos = self.kdijvec[ij[dpos,:], 0]
             jpos = self.kdijvec[ij[dpos,:], 1]
-            print ipos, jpos
-            print field[jpos, ipos], np.mean(field[jpos, ipos])
-            print weights[dpos,:],  weights[dpos,:].sum()
-            print field[jpos, ipos] * weights[dpos,:]
-            print (field[jpos, ipos] * weights[dpos,:]).sum()
-            print fldvec[dpos]
+            print(ipos, jpos)
+            print(field[jpos, ipos], np.mean(field[jpos, ipos]))
+            print(weights[dpos,:],  weights[dpos,:].sum())
+            print(field[jpos, ipos] * weights[dpos,:])
+            print((field[jpos, ipos] * weights[dpos,:]).sum())
+            print(fldvec[dpos])
         return fldvec
         
     def ll2ij(self, lon, lat, mask=None, cutoff=None, nei=1, all_nei=False,
@@ -268,12 +300,12 @@ class Grid(object):
         fldvec    = np.zeros((daysback, len(latvec))) * np.nan
         for days in np.arange(daysback):
             for n,jd in enumerate(np.unique(intjdvec)):
-                print intjdvec.max() - jd
+                print(intjdvec.max() - jd)
                 mask = intjdvec == jd
                 try:
                     fld = self.get_field(fldname, jd=jd)
                 except IOError:
-                    print "No file found"
+                    print("No file found")
                     continue
                 #fldvec[days, mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
                 if ivec.ndim == 2:
@@ -295,9 +327,9 @@ class Grid(object):
         self.nj_mask = lonmsk & latmsk
         self.nj_ivec,self.nj_jvec = self.ll2ij(lonvec[self.nj_mask],
                                                latvec[self.nj_mask])
-
+    """
     def reproject(self, nj_obj, field):
-        """Reproject a field of another njord inst. to the current grid"""
+        #Reproject a field of another njord inst. to the current grid
         if not hasattr(self,'nj_ivec'):
             self.add_njijvec(nj_obj)
         field = getattr(nj_obj, field) if type(field) is str else field
@@ -327,7 +359,35 @@ class Grid(object):
         except:
             print "Couldn't load landmask for %s" % self.projname
         return fld
+    """
 
+
+
+
+    def reproject(self, nj_inst, field, roi=None):
+        """Reproject a field of another njord inst. to the current grid"""
+        field = getattr(nj_inst, field) if type(field) is str else field
+
+        """
+        if hasattr(nj_obj, 'tvec') and (len(nj_obj.tvec) == field.shape[0]):
+            newfield = np.zeros(nj_obj.tvec.shape + self.llat.shape)
+            for tpos in range(len(nj_obj.tvec)):
+                newfield[tpos,:,:] = self.reproject(nj_obj, field[tpos,...])
+            return newfield
+        """
+        
+        if not hasattr(self, "_prdef"):
+            self._prdef = pr.geometry.GridDefinition(lons=self.llon,
+                                                     lats=self.llat)
+        if not hasattr(nj_inst, "_prdef"):
+            nj_inst._prdef = pr.geometry.GridDefinition(lons=nj_inst.llon,
+                                                        lats=nj_inst.llat)
+        if roi is None:
+            roi = nj_inst.dy_approx().max() * 2
+
+        return pr.kd_tree.resample_nearest(nj_inst._prdef, field,
+                                           self._prdef, roi)
+    
     def decheck(self,fieldname=None):
         """Remove checkerboarding by smearing the field"""
         if not fieldname: 
@@ -346,7 +406,7 @@ class Grid(object):
     def rebin(self, field, shape):
         """Rebin field to a coarser matrix"""
         sh = shape[0],field.shape[0]//shape[0],shape[1],field.shape[1]//shape[1]
-        return nanmedian(nanmedian(field.reshape(sh),axis=-1), axis=1)
+        return np.nanmedian(np.nanmedian(field.reshape(sh),axis=-1), axis=1)
 
     def get_field(self, field,  **kwargs):
         self.load(field, **kwargs)
@@ -363,8 +423,8 @@ class Grid(object):
                            open(local_filename, 'wb').write)
             ftp.quit()
         else:
-            print "downloading\n %s \nto\n %s" % (url, local_filename)
-            r = requests.get(url, params=params, stream=True)
+            print("downloading\n %s \nto\n %s" % (url, local_filename))
+            r = requests.get(url, params=params, stream=True,timeout=2)
             if r.ok:
                 if local_filename is None:
                     return r.text
@@ -392,19 +452,32 @@ class Grid(object):
         for i,j in zip([0,0,1,-1, -1,-1,1,1],[1,-1,0,0,-1,1,-1,1]):
             self.landmask[ii+i,jj+j]=0
 
+    @property
+    def fulltvec(self):
+        minjd = getattr(self, "minjd", 0)
+        maxjd = getattr(self, "maxjd", int(pl.date2num(dtm.now())))
+        return np.arange(minjd, maxjd+1)
+
+    def get_tvec(self, jd1, jd2):
+        jd1 = pl.datestr2num(jd1) if type(jd1) is str else jd1
+        jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
+        tvec = self.fulltvec
+        if jd1 < tvec.min():
+            raise ValueError, "jd1 too small"
+        if jd2 > tvec.max():
+            raise ValueError, "jd2 too large"
+        return tvec[(tvec >= jd1) & (tvec <= jd2)]
+        
     def timeseries(self, fieldname, jd1, jd2, mask=None):
         """Create a timeseries of fields using mask to select data"""
         mask = mask if mask is not None else self.llat == self.llat
-        jd1 = pl.datestr2num(jd1) if type(jd1) is str else jd1
-        jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
-
-        self.tvec = np.arange(jd1, jd2+1)
+        self.tvec = self.get_tvec(jd1, jd2)
         field = np.zeros((len(self.tvec),) + self.llat.shape, dtype=np.float32)
         for n,jd in enumerate(self.tvec):
-            print pl.num2date(jd), pl.num2date(jd2)
+            print(pl.num2date(jd), len(self.tvec) - n)
             try:
                 field[n,:,:] = self.get_field(fieldname, jd=jd).astype(np.float32)
-            except KeyError:
+            except (KeyError, IOError):
                 field[n,:,:] = np.nan
             field[n, ~mask] = np.nan
         setattr(self, fieldname + 't', field)
@@ -420,7 +493,7 @@ class Grid(object):
         hsmat = np.zeros((jd2-jd1+1,bins), dtype=np.int)
         tvec = np.arange(jd1,jd2+1)
         for n_t,jd in enumerate(tvec):
-            print pl.num2date(jd)
+            print(pl.num2date(jd))
             self.load(fieldname, jd=jd)
             field = self.__dict__[fieldname]
             field[~mask] = np.nan
@@ -451,26 +524,31 @@ class Grid(object):
         return
 
     @property
-    def mp(self, **kwargs):
-        """Return a projmap instance as defined by self.map_region"""
-        if USE_BASEMAP:
-            if not 'mp' in self.__dict__.keys():
-                self.__dict__['mp'] = projmap.Projmap(self.map_region, **kwargs)
-            if self.__dict__['mp'].region != self.map_region:
-                self.__dict__['mp'] = projmap.Projmap(self.map_region)
-            return self.__dict__['mp']
-        else:
-            raise ImportError, "Basemap not installed. Learn more at http://matplotlib.org/basemap/"
-        
+    def mp(self, map_region=None):
+        """Return handle to projmap instance"""
+        if not hasattr(self, '_map_instance'):
+            if USE_BASEMAP:
+                self._map_instance = projmap.Projmap(self.map_region)
+                self.mpxll,self.mpyll = self.mp(self.llon,self.llat)
+            else:
+                raise ImportError("Module 'projmap' not available")
+        return self._map_instance
+
+    def change_map_region(self, new_map_region):
+            self.map_region = new_map_region
+            if hasattr(self,'_map_instance'):
+                    del self._map_instance
+
+
     def pcolor(self, fld, title=None, colorbar=False, **kwargs):
         """Make a pcolor-plot of field"""
         if USE_FIGPREF: figpref.current()
         if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
         if type(fld) == str:
-            field = getattr(self, fld)
+            field = np.squeeze(getattr(self, fld))
         else:
-            field = fld
+            field = np.squeeze(fld)
         x,y = self.mp(self.llon, self.llat)
         self.mp.pcolormesh(x,y,miv(field), **kwargs)
         self.mp.nice()
@@ -493,24 +571,56 @@ class Grid(object):
         else:
             field = fld
         x,y = self.mp(self.llon, self.llat)
-        self.mp.contour(x,y,miv(field), *args, **kwargs)
+        cs = self.mp.contour(x,y,miv(field), *args, **kwargs)
         self.mp.nice()
-
+        return cs
         
-    def movie(self,fld, jdvec, k=0, c1=0,c2=10):
-        """Create a movie of a field """
-        import anim
-        mv = anim.Movie()
-        for n,jd in enumerate(jdvec):
-            self.load(fld,jd=jd)
-            pl.clf()
-            self.pcolor(self.__dict__[fld][k,:,:])
-            pl.clim(c1, c2)
-            pl.colorbar(pad=0,aspect=40)
-            pl.title('%s %s' % (fld, pl.num2date(jd)
-                                .strftime('%Y-%m-%d %H:%M')))
-            mv.image()
-        mv.video()
+    #    def movie(self,fld, jdvec, k=0, c1=0,c2=10):
+    #        """Create a movie of a field """
+    #        import anim
+    #        mv = anim.Movie()
+    #        for n,jd in enumerate(jdvec):
+    #            self.load(fld,jd=jd)
+    #            pl.clf()
+    #            self.pcolor(self.__dict__[fld][k,:,:])
+    #            pl.clim(c1, c2)
+    #            pl.colorbar(pad=0,aspect=40)
+    #            pl.title('%s %s' % (fld, pl.num2date(jd)
+    #                                .strftime('%Y-%m-%d %H:%M')))
+    #            mv.image()
+    #        mv.video()
+
+
+
+    def movie(self, fldname, jd1=None, jd2=None, jdvec=None, fps=10, **kwargs):
+        curr_backend = plt.get_backend()
+        plt.switch_backend('Agg')
+        FFMpegWriter = animation.writers['ffmpeg']
+        metadata = dict(title='%s' % (self.projname),
+                        artist=self.projname,
+                        comment='https://github.com/brorfred/njord')
+        writer = FFMpegWriter(fps=fps, metadata=metadata,
+            extra_args=['-vcodec', 'libx264',"-pix_fmt", "yuv420p"])
+
+        jdvec = self.get_tvec(jd1, jd2) if jdvec is None else jdvec
+        fig = plt.figure()
+        with writer.saving(fig, "%s.mp4" % self.projname, 200):
+            for jd in jdvec:
+                pl.clf()
+                print(pl.num2date(jd).strftime("%Y-%m-%d %H:%M load "), end="")
+                sys.stdout.flush()
+                try:
+                    fld= self.get_field(fldname, jd=jd)
+                except:
+                    print("not downloaded" % jd)
+                    continue
+                print("plot ", end="")
+                sys.stdout.flush()
+                self.pcolor(fld, **kwargs)
+                pl.title(pl.num2date(jd).strftime("%Y-%m-%d %H:%M"))
+                print("write")
+                writer.grab_frame()#bbox_inches="tight", pad_inches=0)
+        plt.switch_backend(curr_backend)
 
     def check_gridtype(self):
         pass
