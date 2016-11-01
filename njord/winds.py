@@ -1,19 +1,25 @@
-import os.path
+import os, os.path
 from datetime import datetime as dtm
 import ftplib
+import urlparse
 
 import scipy
 import numpy as np
 import pylab as pl
-from scipy.io import netcdf_file
+import netCDF4
+
+import bs4
+import requests
 
 import base
 import gmtgrid
+
+
 try:
-    import bln
-    HAS_BLN= True
+    import pyhdf
+    HAS_HDF = True
 except:
-    HAS_BLN= False
+    HAS_HDF = False
     
 class Seawinds(base.Grid):
     """Read jpl Seawinds fields"""
@@ -26,7 +32,7 @@ class Seawinds(base.Grid):
         if not os.path.isfile(self.gridfile):
             self.retrive_file(self.dataurl, self.gridfile)
         try:
-            n = netcdf_file(self.gridfile, 'r')
+            n = netCDF4.Dataset(self.gridfile, 'r')
         except:
             print 'Error opening the gridfile %s' % self.gridfile
             raise
@@ -43,22 +49,22 @@ class Seawinds(base.Grid):
         if not os.path.isfile(filename):
             self.download(filename)
         try:
-            nc = netcdf_file(filename)
+            nc = netCDF4.Dataset(filename)
         except:
             os.remove(filename)
             self.download(filename)
             try:
-                nc = netcdf_file(filename)
+                nc = netCDF4.Dataset(filename)
             except:
                 filename = filename.rstrip(".nc") + "rt.nc"
                 if not os.path.isfile(filename):
                     self.download(filename)
                 try:
-                    nc = netcdf_file(filename)
+                    nc = netCDF4.Dataset(filename)
                 except TypeError:
                     os.remove(filename)
                     self.download(filename)
-                    nc = netcdf_file(filename)
+                    nc = netCDF4.Dataset(filename)
                     
         u = nc.variables['u'][:].copy()
         v = nc.variables['v'][:].copy()
@@ -91,7 +97,7 @@ class CCMP(base.Grid):
     def setup_grid(self):
 	"""Setup lat-lon matrices for CCMP"""
 	try:
-	    gc = netcdf_file(self.gridfile, 'r')
+	    gc = netCDF4.Dataset(self.gridfile, 'r')
         except:
             print 'Error opening the gridfile %s' % datadir + filename
             raise
@@ -107,7 +113,7 @@ class CCMP(base.Grid):
 				"analysis_%04i%02i%02i_v11l30flk.nc" %
                                   	(self.yr,self.mn,self.dy))
         if os.path.isfile(filename):
-            nc = netcdf_file(filename)
+            nc = netCDF4.Dataset(filename)
         else:
             raise IOError, 'Error opening the windfile %s' % filename
 	uH = nc.variables['uwnd']
@@ -165,22 +171,62 @@ class ncep:
 class Quikscat(base.Grid):
     
     def __init__(self, **kwargs):
-        if not HAS_BLN:
-            raise ImportError, "The bln module is missing."
         super(Quikscat, self).__init__(**kwargs)
 
     def setup_grid(self):
-        self.lat,self.lon = bln.grid()
-        self.llon,self.llat = np.meshgrid(self.lon,self.lat)
+        self.latvec = np.linspace(-89.875, 89.875, 720)
+        self.gmt = gmtgrid.Shift(np.linspace(0, 360, 1440))
+        self.lonvec = self.gmt.lonvec 
+        self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
         
-        
-    def load(self,**kwargs):
-        self._timeparams(**kwargs)
-        u,v = bln.readuv_day(self.jd)
-        nwnd =np.sqrt(u**2 + v**2)
-        #nwnd[nwnd>200]=np.nan
-        return nwnd[...,self.j1:self.j2, self.i1:self.i2]
+    def load(self, fldname, **kwargs):
 
+        def merge(fldname, fldname1, fldname2):
+            fld1 = self.get_field(fldname1, **kwargs)
+            fld2 = self.get_field(fldname2, **kwargs)
+            setattr(self, fldname, np.nanmedian((fld1, fld2),axis=0))
+        
+        if fldname == "uvel":
+            merge("uvel", "des_avg_wind_vel_u", "asc_avg_wind_vel_u")
+            return
+        if fldname == "vvel":
+            merge("vvel", "des_avg_wind_vel_v", "asc_avg_wind_vel_v")
+            return
+        if fldname == "nwnd":
+            uvel = self.get_field("uvel", **kwargs)
+            vvel = self.get_field("vvel", **kwargs)
+            setattr(self, "nwnd", np.sqrt(uvel**2 + vvel**2))
+            return
+        
+        self._timeparams(**kwargs)
+        filename = self.filedict(self.yr)[self.jd] + ".gz.nc"
+        fn = os.path.join(self.datadir,  filename)
+        if not os.path.join(fn):
+            url = "%s/%s/%s" % (self.dataurl, year, filename)
+            wn.retrive_file(url, fn)
+        fld = self.gmt.field(netCDF4.Dataset(fn).variables[fldname][:].copy())
+        fld = fld[self.j1:self.j2, self.i1:self.i2]
+        fld[fld==0] = np.nan
+        setattr(self, fldname, fld)
+
+    def filedict(self, year):
+        filename = os.path.join(self.datadir,  "fdict_%04i.npz" % year)
+        if os.path.isfile(filename):
+            return np.load(filename)["fdict"].item()
+        else:
+            req = requests.get("%s/%04i/%s" %(self.dataurl,year,self.flistpage))
+            soup = bs4.BeautifulSoup(req.text,"lxml")
+            taglist = soup.find_all("a",itemprop="contentUrl", string="html")
+            fdict = {}
+            for tag in taglist:
+                stamp = ".".join(tag.attrs['href'].split(".")[:2])
+                datestr = stamp.split("_")[-1].split(".")[0]
+                jd = int(pl.datestr2num("%s-01-01" % datestr[:4]) +
+                         int(datestr[4:]))
+                fdict[jd] = stamp
+            np.savez(filename, fdict=fdict)
+            return fdict
+            
 class CORE2:
 
     def __init__(self,datadir = "/projData/CORE2/"):
@@ -188,7 +234,7 @@ class CORE2:
         self.datadir = datadir
         filename = "u_10.2005.05APR2010.nc"
         try:
-            n = netcdf_file(datadir + filename)
+            n = netCDF4.Dataset(datadir + filename)
         except:
             print 'Error opening the gridfile %s' % datadir + filename
             raise
@@ -204,8 +250,8 @@ class CORE2:
         dy = pl.num2date(jd1).day
         filesuff = ".%04i.05APR2010.nc" %(yr)
         try:
-            nu = netcdf_file(self.datadir + "u_10" + filesuff)
-            nv = netcdf_file(self.datadir + "v_10" + filesuff)
+            nu = netCDF4.Dataset(self.datadir + "u_10" + filesuff)
+            nv = netCDF4.Dataset(self.datadir + "v_10" + filesuff)
         except:
             print 'Error opening the windfile %s%s' % (self.datadir,filesuff)
             raise
