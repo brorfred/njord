@@ -14,13 +14,6 @@ import requests
 import base
 import gmtgrid
 
-
-try:
-    import pyhdf
-    HAS_HDF = True
-except:
-    HAS_HDF = False
-    
 class Seawinds(base.Grid):
     """Read jpl Seawinds fields"""
     def __init__(self, **kwargs):
@@ -215,7 +208,7 @@ class Quikscat(base.Grid):
             return np.load(filename)["fdict"].item()
         else:
             req = requests.get("%s/%04i/%s" %(self.dataurl,year,self.flistpage))
-            soup = bs4.BeautifulSoup(req.text,"lxml")
+            soup = bs4.BeautifulSoup(req.text,"html.parser")
             taglist = soup.find_all("a",itemprop="contentUrl", string="html")
             fdict = {}
             for tag in taglist:
