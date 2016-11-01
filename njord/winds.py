@@ -2,6 +2,7 @@ import os, os.path
 from datetime import datetime as dtm
 import ftplib
 import urlparse
+import gzip
 
 import scipy
 import numpy as np
@@ -35,10 +36,10 @@ class Seawinds(base.Grid):
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
 
     def load(self, fld="nwnd", **kwargs):
-	"""Load field for a given julian date. Returns u,v, or nwnd(windnorm)"""
+        """Load field for a given julian date. Returns u,v, or nwnd(windnorm)"""
         self._timeparams(**kwargs)
         filename = os.path.join(self.datadir,
-                            "uv%04i%02i%02i.nc" % (self.yr, self.mn, self.dy))
+            "uv%04i%02i%02i.nc" % (self.yr, self.mn, self.dy))
         if not os.path.isfile(filename):
             self.download(filename)
         try:
@@ -78,55 +79,48 @@ class Seawinds(base.Grid):
 
 
 class CCMP(base.Grid):
-    """Read jpl CCMP fields
-    http://podaac.jpl.nasa.gov/dataset/CCMP_MEASURES_ATLAS_L4_OW_L3_0_WIND_VECTORS_FLK
-     ftp://podaac-ftp.jpl.nasa.gov/allData/ccmp/
-
-    """
+    """Read jpl CCMP fields"""
     def __init__(self, **kwargs):
         """Initialize the class with stuff from base.Grid"""
-	super(CCMP, self).__init__(**kwargs)
-	
+        super(CCMP, self).__init__(**kwargs)
+        pass
+    
     def setup_grid(self):
-	"""Setup lat-lon matrices for CCMP"""
-	try:
-	    gc = netCDF4.Dataset(self.gridfile, 'r')
-        except:
-            print 'Error opening the gridfile %s' % datadir + filename
-            raise
+        """Setup lat-lon matrices for CCMP"""
+        if not os.path.isfile(self.gridfile):
+            self.load("uvel", yr=2007, mn=12, dy=1)
+        gc = netCDF4.Dataset(self.gridfile, 'r')
         self.lat = gc.variables['lat'][:]
-	self.gmt = gmtgrid.Shift(gc.variables['lon'][:].copy())
+        self.gmt = gmtgrid.Shift(gc.variables['lon'][:].copy())
         self.lon = self.gmt.lonvec 
         self.llon,self.llat = np.meshgrid(self.lon,self.lat)
 
-    def load(self, fld="nwnd", **kwargs):
-	"""Load field for a given julian date. Returns u,v, or nwnd(windnorm)"""
+    def load(self, fldname="nwnd", **kwargs):
+        """Load wind field"""
+        if fldname == "nwnd":
+            uvel = self.get_field("uvel", **kwargs)
+            vvel = self.get_field("vvel", **kwargs)
+            setattr(self, "nwnd", np.sqrt(uvel**2 + vvel**2))
+            return
+        
         self._timeparams(**kwargs)
-	filename = os.path.join(self.datadir,
-				"analysis_%04i%02i%02i_v11l30flk.nc" %
-                                  	(self.yr,self.mn,self.dy))
-        if os.path.isfile(filename):
-            nc = netCDF4.Dataset(filename)
+        filename = ("analysis_%04i%02i%02i_v11l30flk.nc" %
+            (self.yr,self.mn,self.dy))
+        fn = os.path.join(self.datadir, filename)
+        if not os.path.isfile(filename):
+            url = "%s/%04i/%02i/" % (self.dataurl, self.yr, self.mn)
+            self.retrive_file(url, fn + ".gz")
+            with gzip.open(fn + ".gz", 'rb') as gzfile:
+                with open(fn, 'wb') as ncfile:
+                    ncfile.write( gzfile.read() )
+        fld = self.gmt.field(netCDF4.Dataset(fn).variables[fldname][:].copy())
+        if "hr" in kwargs:
+            fld = fld[kwargs["hr"]/6, self.j1:self.j2, self.i1:self.i2]
         else:
-            raise IOError, 'Error opening the windfile %s' % filename
-	uH = nc.variables['uwnd']
-	vH = nc.variables['vwnd']
-	uvel = self.gmt.field(uH.data.copy()) * uH.scale_factor
-	vvel = self.gmt.field(vH.data.copy()) * vH.scale_factor
-	
-	uvel[uvel<(uH.missing_value * uH.scale_factor)] = np.nan
-	vvel[vvel<(vH.missing_value * vH.scale_factor)] = np.nan
-	if (fld=="u") | (fld=="uvel"):
-	    self.uvel = gmtgrid.convert(np.squeeze(u), self.gr)
-	elif (fld=="v") | (fld=="vvel"):
-	    self.vvel = gmtgrid.convert(np.squeeze(v), self.gr)
-	else:
-   	    self.nwnd = gmtgrid.convert(np.squeeze(np.sqrt(u**2 + v**2)),self.gr)
+            fld = np.nanmean(fld[:,self.j1:self.j2, self.i1:self.i2], axis=0)
+        setattr(self, fldname, fld)
 
-
-
-
-class ncep:
+class NCEP:
 
     def __init__(self,datadir = "/projData/ncep/"):
         filename = "vwnd.sig995.2008.nc"        
