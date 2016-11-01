@@ -194,9 +194,9 @@ class Quikscat(base.Grid):
         self._timeparams(**kwargs)
         filename = self.filedict(self.yr)[self.jd] + ".gz.nc"
         fn = os.path.join(self.datadir,  filename)
-        if not os.path.join(fn):
-            url = "%s/%s/%s" % (self.dataurl, year, filename)
-            wn.retrive_file(url, fn)
+        if not os.path.isfile(fn):
+            url = "%s/%s/%s" % (self.dataurl, self.yr, filename)
+            self.retrive_file(url, fn)
         fld = self.gmt.field(netCDF4.Dataset(fn).variables[fldname][:].copy())
         fld = fld[self.j1:self.j2, self.i1:self.i2]
         fld[fld==0] = np.nan
