@@ -85,6 +85,7 @@ class Grid(object):
 
     @property
     def shape(self):
+        """Return the shape of the field"""
         return self.llat.shape
             
     def _set_maxmin_ij(self):
@@ -135,7 +136,6 @@ class Grid(object):
             raise ValueError, "Date after last available model date"
         self._jd_to_dtm()
 
-
     def dx_approx(self):
         """Caclulate dx from llon and llat"""
         if not hasattr(self, "_dx_approx"):
@@ -154,7 +154,7 @@ class Grid(object):
 
     def dy_approx(self):
         """Caclulate dy from llon and llat"""
-        if not hasattr(self, "_dx_approx"):
+        if not hasattr(self, "_dy_approx"):
             dy = self.llat * np.nan
             for j in xrange(self.imt):
                 latvec1 =  (self.llat[0:-2,j] + self.llat[1:-1,j]) / 2
@@ -197,12 +197,10 @@ class Grid(object):
         else:
             return False
 
-
     def vprint(self, string, log_level=None):
         if getattr(self, 'verbose', False) == True:
             print(string)
 
-                
     def add_ij(self):
         self.imat,self.jmat = np.meshgrid(np.arange(self.i2-self.i1),
                                           np.arange(self.j2-self.j1))
@@ -218,7 +216,7 @@ class Grid(object):
         return self._ijvec
             
     def add_kd(self, mask=None, coord="lonlat"):
-        """Generate a KD-tree objects and for the current njord instance"""
+        """Generate a KD-tree objects for the current njord instance"""
         if coord == "ij":
             self.add_ij()
             xvec = self.kdivec = np.ravel(self.imat)
@@ -575,23 +573,6 @@ class Grid(object):
         self.mp.nice()
         return cs
         
-    #    def movie(self,fld, jdvec, k=0, c1=0,c2=10):
-    #        """Create a movie of a field """
-    #        import anim
-    #        mv = anim.Movie()
-    #        for n,jd in enumerate(jdvec):
-    #            self.load(fld,jd=jd)
-    #            pl.clf()
-    #            self.pcolor(self.__dict__[fld][k,:,:])
-    #            pl.clim(c1, c2)
-    #            pl.colorbar(pad=0,aspect=40)
-    #            pl.title('%s %s' % (fld, pl.num2date(jd)
-    #                                .strftime('%Y-%m-%d %H:%M')))
-    #            mv.image()
-    #        mv.video()
-
-
-
     def movie(self, fldname, jd1=None, jd2=None, jdvec=None, fps=10, **kwargs):
         curr_backend = plt.get_backend()
         plt.switch_backend('Agg')
