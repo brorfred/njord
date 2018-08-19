@@ -2,60 +2,55 @@ import os, os.path
 import glob
 import subprocess as sbp
 from datetime import datetime as dtm
-import urllib
-import urllib2
 import re
 from distutils import spawn
 import warnings
+from urllib.parse import urlparse
 
+from bs4 import BeautifulSoup                
+import requests
 import numpy as np
-import pylab as pl
-
+import njord.utils.mpl_dates as pl
 from netCDF4 import Dataset
 
-import base
+from njord import base
 from njord.utils import yrday
 
 class Base(base.Grid):
 
     def __init__(self, **kwargs):
         super(Base, self).__init__(**kwargs)
-        self.lat = self.llat[:,0]
-        self.lon = self.llon[0,:]
-        self.add_vc()
-        self.datadir = '%s/%s%s/' % (self.datadir, self.fp, self.res) 
+        self.datadir = '%s/%s%s/' % (self.datadir, self.fp, self.res)
+        if not os.path.isdir(self.datadir):
+            os.makedirs(self.datadir)
         self.only_npz = kwargs.get('only_npz', False)
         if not hasattr(self, "maxjd"):
             self.maxjd = int(pl.date2num(dtm.now())) - 3
-        self.use_npz = setattr(self, "use_npz", False)
 
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
         if self.res == "9km":
-            i1,i2,j1,j2 = (0000 ,4320, 0, 2160)
+            i0t,imt,j0t,jmt = (0000 ,4320, 0, 2160)
         elif self.res == "4km":
-            i1,i2,j1,j2 = (0000 ,8640, 0, 4320)
+            i0t,imt,j0t,jmt = (0000 ,8640, 0, 4320)
         elif self.res == "2km":
-            i1,i2,j1,j2 = (0000 ,17280, 0, 8640)
+            i0t,imt,j0t,jmt = (0000 ,17280, 0, 8640)
         elif self.res == "1deg":
-            i1,i2,j1,j2 = (0000 ,360, 0, 180)
-        incr  = 360.0/i2
-        jR    = np.arange(j1, j2)
-        iR    = np.arange(i1, i2)
-        [x,y] = np.meshgrid(iR,jR)
-        self.llat = (  90 - y*incr - incr/2)
-        self.llon = (-180 + x*incr + incr/2)
-        self.lat = self.llat[:,0]
-        self.lon = self.llon[0,:]
-        self.imt = i2
-        self.jmt = j2
-        self.i1 = i1 if not hasattr(self, 'i1') else self.i1
-        self.i2 = i2 if not hasattr(self, 'i2') else self.i2
-        self.j1 = j1 if not hasattr(self, 'j1') else self.j1
-        self.j2 = j2 if not hasattr(self, 'j2') else self.j2
+            i0t,imt,j0t,jmt = (0000 ,360, 0, 180)
+        incr  = 360.0/imt
+        jR    = np.arange(j0t, jmt)
+        iR    = np.arange(i0t, imt)
+        self.latvec = (  90 - jR*incr - incr/2)[::-1]
+        self.lonvec = (-180 + iR*incr + incr/2)
+        self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
+        self.imt = imt
+        self.jmt = jmt
+        for pstr, pval in zip(["i1","i2","j1","j2"], [i0t,imt,j0t,jmt]):
+            setattr(self, pstr, getattr(self, pstr, pval))
 
     def generate_filename(self, fld='chl', fldtype="DAY", **kwargs):
         """Generate filename"""
+        stamp = "%s%s.L3m_%s_%s_%skm.nc"
         if len(kwargs):
             self._timeparams(**kwargs)
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
@@ -76,58 +71,50 @@ class Base(base.Grid):
             datestr = ("%i%03i%i%03i" % 
                        (self.yr, yd1[pos], self.yr, yd2[pos]))
         elif fldtype == "CU":
-            self.a_cu_url_9km = 'MODISA/Mapped/Cumulative/4km/chlor/'
-            datestr = max(self._retrieve_datestamps(self.a_cu_url_9km))
+            try:
+                datestr = self._retrieve_datestamps(self.cu_url_9km)[-1]
+            except (requests.ConnectTimeout,requests.ConnectionError):
+                flist = glob.glob(os.path.join(self.datadir,
+                    stamp % (self.fp, "*", fldtype, self.vc[fld], self.res[0])))
+                if len(flist) == 0:
+                    raise IOError("Can't download CU file")
+                else:
+                    return os.path.basename(flist[-1])
         else:
-            raise TypeError, "File average type not included"
-        return("%s%s.L3m_%s_%s_%s%s.nc" % (self.fp, datestr, fldtype,
-										self.vc[fld][0], self.res[0],
-                                        self.vc[fld][1]))
+            raise TypeError("File typ%s not implemented" % fldtype)
+        return stamp % (self.fp, datestr, fldtype, self.vc[fld], self.res[0])
 
     def _retrieve_datestamps(self, path, ext=".nc"):
         """Retrive datestamps for all files in dir on GSFC server"""
-        url = "http://%s/%s" % (self.gsfc_host, path)
+        url = "https://%s/%s" % (self.gsfc_host, path)
         datelist = []
-        for line in urllib.urlopen(url):
-            if ("cgi/getfile" in line) & (ext in line):
-                datelist.append(re.findall(
-                    r'getfile/%s([^E]+).L3m' % self.fp, line)[0][:14])
+        bs = BeautifulSoup(requests.get(url, timeout=1).content, "html.parser")
+        for td in bs.find_all("td"):
+            if td.a is not None:
+                datelist.append(
+                    (urlparse(td.a.attrs["href"]).path.split("/")[-1][1:15]))
         return datelist
-
 
     def refresh(self, fld, fldtype="DAY", jd1=None, jd2=None, delall=False):
         """ Read a L3 mapped file and add field to current instance"""
-        jd1 = pl.datestr2num('2003-01-01') if jd1 is None else jd1
-        jd2 = int(pl.date2num(dtm.now())) - 1  if jd2 is None else jd2
+        jd1 = self.minjd if jd1 is None else jd1
+        jd2 = self.maxjd if jd2 is None else jd2 + 1
         for jd in np.arange(jd1, jd2):
-            print " --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d')
+            print(" --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d'))
             filename = os.path.join(
-                self.datadir, self.generate_filename(jd,fld,fldtype) + ".nc")
+                self.datadir, self.generate_filename(fld,fldtype, jd=jd))
             if delall:
                 for fn in glob.glob(filename + "*"):
-                    print "Deleted %s" % fn
+                    print("Deleted %s" % fn)
                     os.remove(fn)
-            print "Checking files"
-            if not os.path.isfile(filename[:-3] + '.npz'):
-                try:
-                    self.load(fld, fldtype, jd=jd, verbose=True)
-                except IOError:
-                    print "Downloading failed. Trying to remove old files."
-                    try:
-                        os.remove(filename)
-                    except:
-                        pass
-                    try:
-                        self.load(fld,fldtype,jd=jd,verbose=True)
-                    except:
-                        print ("   ###   Warning! Failed to add %s   ###" %
-                               os.path.basename(filename))
-                print "\n"
+            print("Looking for file")
+            if os.path.isfile(filename):
+                print("Found")
             else:
-                print "found"
-
+                print("File doesn't exist.")
+                self.download(filename)
              
-    def load(self, fld, fldtype="DAY", nan="nan", **kwargs):
+    def load(self, fld="chl", fldtype="DAY", nan=np.nan, **kwargs):
         """Load the satellite field associated with a given time."""
         if fld in ["fqy",]:
             pass
@@ -143,22 +130,29 @@ class Base(base.Grid):
             self.djd1 = self.jd+1
             self.dmat1 = self.dmat2
             return
-        self.filename = self.generate_filename(fld, fldtype)
+        self.filename = os.path.join(
+            self.datadir, self.generate_filename(fld, fldtype))
         self.vprint( "datadir:        %s" % self.datadir)
         self.vprint( "filename:       %s" % os.path.basename(self.filename))
-        self._l3read(fld,nan=nan)
+        if not os.path.isfile(self.filename):
+            status = self.download(self.filename)
+            print(status)
+        setattr(self, fld, self._l3read_nc4(fld, nan))
 
     @property
     def landmask(self):
         """Return a landmask"""
         if not hasattr(self,'_landmask'):
-            self.load('par','CU', nan="nan")
-            self._landmask = np.isnan(self.par)
+            try:
+                fld = self.get_field('par', fldtype='CU', nan="nan")
+            except KeyError:
+                fld = self.get_field('chl', fldtype='CU', nan="nan")
+            self._landmask = np.isnan(fld)
         return self._landmask
     
     def add_mnclim(self):
         """Add a list with file name dates for Monthly climatologies"""
-        datelist = self._retrieve_datestamps(self.a_mc_url_9km)
+        datelist = self._retrieve_datestamps(self.mc_url_9km)
         self.mc_datedict = {}
         for dstr in datelist[1:]:
             mn,_ = yrday.mndy(int(dstr[:4]),int(dstr[4:7]))
@@ -171,155 +165,53 @@ class Base(base.Grid):
 
         predict = {}
         if "mc" in fldtype.lower():
-            datelist = self._retrieve_datestamps(self.a_mc_url_9km)
+            datelist = self._retrieve_datestamps(self.mc_url_9km)
             self.mc_datedict = {}
             for dstr in datelist[1:]:
                 mn,_ = yrday.mndy(int(dstr[:4]),int(dstr[4:7]))
                 self.mc_datedict[mn] = dstr
         elif "mo" in fldtype.lower():
-            datelist = self._retrieve_datestamps(self.a_mo_url_9km)
+            datelist = self._retrieve_datestamps(self.mo_url_9km)
             for dstr in datelist[1:]:
                 mn,_ = yrday.mndy(int(dstr[:4]),int(dstr[4:7]))
                 yr = int(dstr[:4])
                 predict[yr*100 + mn] = dstr
         setattr(self, "%s_fileprefs" % fldtype, predict)
+        
 
-    def add_vc(self):
-        """Add a dict with filename variable components"""
-        self.vc = {'k49': ['KD490_Kd_490',         'km',  0,      100],
-                   'chl': ['CHL_chlor_a',          'km',  0.001,  200],
-                   'poc': ['POC_poc',              'km',  0,     1000],
-                   'bbp': ['GIOP01_bbp_443_giop',  'km',  0,    10000],
-                   'sst': ['SST_sst',              'km', -2,       45],
-                   'par': ['PAR_par',              'km', -5,      200],
-                   'flh': ['FLH_nflh',             'km',  0,    10000],
-                   'ipar': ['FLH_ipar',            'km',  0,    10000],
-                   'eup': ['KDLEE_Zeu_lee',        'km',  0,    10000],
-                   'eup_lee': ['KDLEE_Zeu_lee',    'km',  0,    10000],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km',  0,    10000]
-                   }
-
+    def fileurl(self, filename):
+        return "%s%s" % (self.dataurl, os.path.basename(filename))
+        
     def download(self, filename):
         """Download a missing file from GSFC's website"""
-        uri = "http://oceandata.sci.gsfc.nasa.gov/cgi/getfile/"
-        url = "%s%s" % (uri, os.path.basename(filename))
-        if not os.path.isdir(os.path.dirname(filename)):
-            os.makedirs(os.path.dirname(filename))
-        self.retrive_file(url, local_filename=filename)
-        """
-        try:
-            response = urllib2.urlopen(url)
-        except:
-            raise IOError, "File not found on the server.\n tried %s" % url
-        output = open(filename, 'wb')
-        output.write(response.read())
-        output.close()
-        """
-    def _l3read(self,fld='',nan="nan"):
-        """ Read a L3 mapped file and add field to current instance"""
-        self.filename = self.datadir + '/' + self.filename
-        if not fld: fld = self.filename.rsplit('_')[-2]
+        self.retrive_file(self.fileurl(filename), local_filename=filename)
+        if not os.path.isfile(filename):
+            print("------------- Download failed!!! -------------""")
 
-        if os.path.isfile(self.filename[:-3] + '.npz') & (self.use_npz == True):
-            self.vprint( "Found npz file.")
-            l3m_data,base,intercept,slope = self._l3read_npz(fld)
-        else:
-            self.vprint( "No npz file.")
-            if not os.path.isfile(self.filename):
-                if getattr(self, "no_download", False):
-                    raise IOError, "File Missing"
-                else:
-                    print "File missing, downloading from GSFC"
-                    self.download(self.filename)
-
-            l3m_data = self._l3read_nc4()
-            base=-999; intercept=0; slope=1
-
-        if base != -999:
-            field = self.__dict__[fld] = base**((slope * l3m_data) + intercept)
-        else:
-            field = self.__dict__[fld] = ((slope * l3m_data) + intercept)
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            mask = (field < self.minval) | (field > self.maxval)
-            if nan=="nan":
-                field[mask] = np.nan
-
-        if self.use_npz == True:
-            if os.path.isfile(self.filename[:-3] + '.npz'):
-                self.vprint( "npz file already exists, no need to save.")
-            elif (self.llat.shape) != (self.jmt,self.imt):
-                self.vprint( "Not global grid, can't generate npz file.")
-            else:
-                self.add_ij()
-                self._l3write_npz(l3m_data[~mask], self.imat[~mask],
-                                  self.jmat[~mask], base, intercept, slope)
-            if (self.only_npz == True) & os.path.isfile(self.filename):
-                os.remove(self.filename)
-        else:
-            self.vprint( "use_npz set to False.")
-            
-            
-    def _l3read_nc4(self):
+    def _l3read_nc4(self, fld, nan=np.nan):
         self.vprint( "Reading netCDF4 file")
-        print(self.filename)
+        self.vprint(self.filename)
         nc = Dataset(self.filename)
-        nc.set_auto_mask(False)
+        nc.set_auto_mask(True)
         nc.set_auto_scale(True)
         
-        var         = nc.variables[nc.variables.keys()[0]]
-        field       = var[self.j1:self.j2, self.i1:self.i2].copy()
-        try:
-            self.minval = var.valid_min
-        except AttributeError:
-            self.minval = var.display_min
-        try:
-            valid_max = var.valid_max
-        except AttributeError:
-            valid_max = 0
-        try:
-            display_max = var.display_max
-        except AttributeError:
-            display_max = 0
-        self.maxval = max(valid_max, display_max)
+        var = nc.variables[list(nc.variables.keys())[0]]
+        raw = var[self.ijslice_flip]
+        if not hasattr(raw, "mask"):
+            return self.llon * np.nan
+        field = raw.data
+        field[raw.mask] = np.nan  
             
-        start_jd    = pl.datestr2num(nc.time_coverage_start)
-        end_jd      = pl.datestr2num(nc.time_coverage_end)
-        self.jd     = ((start_jd + end_jd)/2)
-        self.date   = pl.num2date(self.jd)
+        #start_jd    = pl.datestr2num(nc.time_coverage_start)
+        #end_jd      = pl.datestr2num(nc.time_coverage_end)
+        #self.jd     = ((start_jd + end_jd)/2)
+        #self.date   = pl.num2date(self.jd)
         return field
 
-    def _l3read_npz(self, fld):
-        """Read an npz file with field data as vectors"""
-        self.vprint( "Reading npz file")
-        l3m_data = self.llat * 0 + self.vc[fld][2] - 1
-        fH = np.load(self.filename[:-3] + '.npz')
-        dvec      = fH['dvec']
-        ivec      = fH['ivec']
-        jvec      = fH['jvec']
-        base      = fH['base']
-        intercept = fH['intercept']
-        slope     = fH['slope']
-        self.jd   = fH['jd']
-        self.date = fH['date']
-        mask = ((jvec>=self.j1) & (jvec<self.j2-1) &
-                (ivec>=self.i1) & (ivec<self.i2-1))
-        l3m_data[jvec[mask]-self.j1, ivec[mask]-self.i1] = dvec[mask]
-        self.minval = self.vc[fld][2]
-        self.maxval = self.vc[fld][3]
-        return l3m_data,base,intercept,slope
-
-    def _l3write_npz(self, dvec, ivec ,jvec, base, intercept, slope):
-        """Create an npz file with field data as vectors""" 
-        self.vprint( "Writing npz file")
-        kwargs = {'dvec' : dvec,
-                  'ivec' : ivec.astype(np.int16),
-                  'jvec' : jvec.astype(np.int16),
-                  'base' : base, 'intercept':intercept, 'slope':slope,
-                  'jd'   : self.jd, 'date':self.date}
-        np.savez_compressed(self.filename[:-3] + '.npz', **kwargs)
-
-
+    
+    @property
+    def fieldlist(self):
+        return self.vc.keys()
 
 class MODIS(Base):
     def __init__(self, res="9km", **kwargs):
@@ -327,58 +219,89 @@ class MODIS(Base):
         self.fp = "A"
         super(MODIS, self).__init__(**kwargs)
 
-class SeaWIFS(Base):
+    @property
+    def maxjd(self):
+        return int(pl.date2num(dtm.now())) - 5
+
+    @property
+    def vc(self):
+        """Add a dict with filename variable components"""
+        return    {'k49':'KD490_Kd_490',     'adg':'IOP_adg_443_giop',
+                   'chl':'CHL_chlor_a',      'poc':'POC_poc',
+                   'bbp':'IOP_bbp_443_giop', 'sst':'SST_sst',
+                   'par':'PAR_par', 'flh':'FLH_nflh', 'ipar':'FLH_ipar',
+                   'eup':'ZLEE_Zeu_lee',     'pic':'PIC_pic'}
+
+Aqua = MODIS
+        
+class SeaWiFS(Base):
     def __init__(self, res="9km", **kwargs):
-        self.res = res        
+        self.res = res
+        if res=="4km":
+            raise TypeError("SeaWiFS has only 9km resolution")
         self.fp = "S"
-        super(SeaWIFS, self).__init__(**kwargs)
+        super(SeaWiFS, self).__init__(**kwargs)
+
+    @property
+    def vc(self):
+        """Add a dict with filename variable components"""
+        return    {'k49':'KD490_Kd_490',
+                   'chl':'CHL_chlor_a',
+                   'poc':'POC_poc',
+                   'bbp':'IOP_bbp_443_giop',
+                   'par':'PAR_par',
+                   'eup' :'ZLEE_Zeu_lee',
+                   }
+
 
 class OCTS(Base):
     def __init__(self, res="9km", **kwargs):
+        if res=="4km":
+            raise TypeError("SeaWiFS has only 9km resolution")
         self.res = res        
         self.fp = "O"
         super(OCTS, self).__init__(**kwargs)
 
+    @property
+    def vc(self):
+        """Add a dict with filename variable components"""
+        return    {'k49':'KD490_Kd_490',
+                   'chl':'CHL_chlor_a',
+                   'poc':'POC_poc',
+                   'bbp':'IOP_bbp_443_giop',
+                   'par':'PAR_par',
+                   }
+
+        
 class CZCS(Base):
     def __init__(self, res="9km", **kwargs):
-        self.res = res        
+        if res=="4km":
+            raise TypeError("SeaWiFS has only 9km resolution")
+        self.res = res
         self.fp = "C"
         super(CZCS, self).__init__(**kwargs)
 
-    def add_vc(self):
+    @property
+    def vc(self):
         """Add a dict with filename variable components"""
-        self.vc = {'k49': ['MO_KD490_Kd_490',         'km',  0,      100],
-                   'chl': ['CHL_chlor_a',       'km',  0.001,  200],
-                   'poc': ['MO_POC_poc',           'km',  0,     1000],
-                   'bbp': ['GIOP01_bbp_443_giop',  'km',  0,    10000],
-                   'sst': ['MO_SST_sst',           'km', -2,       45],
-                   'par': ['MO_PAR_par',           'km', -5,      200],
-                   'flh': ['FLH_nflh',             'km',  0,    10000],
-                   'ipar': ['FLH_ipar',            'km',  0,    10000],
-                   'eup': ['KDLEE_Zeu_lee',        'km',  0,    10000],
-                   'eup_lee': ['KDLEE_Zeu_lee',    'km',  0,    10000],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km',  0,    10000]
-                   }
+        return {'k49':'KD490_Kd_490', 'chl':'CHL_chlor_a'}
 
+        
 class VIIRS(Base):
     def __init__(self, res="9km", **kwargs):
         self.res = res        
         self.fp = "V"
         super(VIIRS, self).__init__(**kwargs)
 
-    def add_vc(self):
+    @property
+    def vc(self):
         """Add a dict with filename variable components"""
-        self.vc = {'k49': ['NPP_KD490_Kd_490',     'km',  0,      100],
-                   'chl': ['NPP_CHL_chlor_a',      'km',  0.001,  200],
-                   'poc': ['NPP_POC_poc',          'km',  0,     1000],
-                   'bbp': ['GIOP01_bbp_443_giop',  'km',  0,    10000],
-                   'sst': ['SST_sst',              'km', -2,       45],
-                   'par': ['PAR_par',              'km', -5,      200],
-                   'flh': ['FLH_nflh',             'km',  0,    10000],
-                   'ipar': ['FLH_ipar',            'km',  0,    10000],
-                   'eup': ['KDLEE_Zeu_lee',        'km',  0,    10000],
-                   'eup_lee': ['KDLEE_Zeu_lee',    'km',  0,    10000],
-                   'eup_mor': ['KDMOREL_Zeu_morel','km',  0,    10000]
+        return    {'k49':'SNPP_KD490_Kd_490',
+                   'chl':'SNPP_CHL_chlor_a',
+                   'poc':'SNPP_POC_poc',
+                   'bbp':'SNPP_IOP_bbp_443_giop',
+                   'sst':'SNPP_SST_sst',
+                   'par':'SNPP_PAR_par',
                    }
 
 
@@ -400,5 +323,5 @@ def mission_min():
             MCmin[mn,:,:] = np.nanmin(
                 np.vstack( (MCmin[mn:+1,:,:],ns.chl[np.newaxis,:,:]) ),
                 axis=0)
-            print jd,pl.num2date(jd).year,mn
+            print(jd,pl.num2date(jd).year,mn)
         return MCmin

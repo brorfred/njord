@@ -1,37 +1,44 @@
+
 from __future__ import print_function
 
 import os,sys
 import datetime
 import warnings
 import ftplib
-import urlparse
+from urllib.parse import urlsplit
+import shelve
 from datetime import datetime as dtm
+import pathlib
 
 import numpy as np
-import pylab as pl
 from scipy.spatial import cKDTree
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-import matplotlib.animation as animation
+try:
+    import pylab as pl
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
+    import matplotlib.animation as animation
+    HAS_MATPLOTLIB = False
+except (ImportError, RuntimeError):
+    import njord.utils.mpl_dates as pl
+    HAS_MATPLOTLIB = False
 
-
-from njord.utils import lldist
 import requests
-import gmtgrid
 
-import config
+from njord.utils import lldist,yrday
+from njord import gmtgrid
+from njord import config
 
 try:
     import projmap
     USE_BASEMAP = True
 except:
-    USE_BASEMAP = False
+    USE_BASEMAP = False   
 try:
     import figpref
     USE_FIGPREF = True
 except:
-    USE_FIGPREF = False
+    USE_FIGPREF = False   
 try:
     import pyresample as pr
     USE_PYRESAMPLE = True
@@ -48,14 +55,41 @@ class Grid(object):
         self.projname = kwargs.get("projname", "%s.%s" %
                                    (self.__module__.split(".")[-1],
                                     type(self).__name__))
+        if kwargs.get("mp") is not None:
+            kwargs["map_region"] = kwargs["mp"]
+        kwargs.pop("mp", None)
+        if kwargs.get("map_region") is not None:
+            mp = self._map_instance = projmap.Projmap(kwargs["map_region"])
+            try:
+                kwargs["lat1"] = kwargs.get("lat1", mp.llcrnrlat)
+                kwargs["lat2"] = kwargs.get("lat2", mp.urcrnrlat)
+                kwargs["lon1"] = kwargs.get("lon1", mp.llcrnrlon)
+                kwargs["lon2"] = kwargs.get("lon2", mp.urcrnrlon)
+            except:
+                pass
+             
         preset_dict = config.load('njord', self.projname, kwargs)
         for key,val in preset_dict.items():
-            setattr(self, key, val)
+            try:
+                setattr(self, key, val)
+            except AttributeError as err:
+                print(err)
+                raise AttributeError(key)
         if not os.path.isdir(self.datadir):
             os.makedirs(self.datadir)
+
+        self.missing_fields = shelve.open(
+            os.path.join(self.datadir, "missing_files.dbm"), writeback=True)
+
         self.setup_grid()
+        if hasattr(self, "imt"):
+            self._fullimt = self.imt
+        if hasattr(self, "jmt"):
+            self._fulljmt = self.jmt
         self._set_maxmin_ij()
-                
+        if (self._fullimt != self.imt) or (self._fulljmt != self.jmt):
+            self._partial_grid = True
+      
     def _llboundaries_to_ij(self):
         """Calculate i1,i2,j1,j2 from lat and lon"""
         if hasattr(self, 'ijarea'):
@@ -69,20 +103,30 @@ class Grid(object):
         lat = self.llat if hasattr(self, 'llat') else self.latvec[:, np.newaxis]
         lon = self.llon if hasattr(self, 'llon') else self.lonvec[np.newaxis, :]
         if hasattr(self,'lat1'):
-            if lat[-1,0] < lat[0,0]:
+            if lat.min() >= self.lat1:
+                self.lat1 = lat.min()
+            elif lat[-1,0] < lat[0,0]:
                 self.j2 = int(np.nonzero(lat>self.lat1)[0].max() + 1)
             else:
                 self.j1 = int(np.nonzero(lat<self.lat1)[0].max())
         if hasattr(self,'lat2'):
-            if lat[-1,0] < lat[0,0]: 
+            if lat.max() <= self.lat2:
+                self.lat2 = lat.max()
+            elif lat[-1,0] < lat[0,0]: 
                 self.j1 = int(np.nonzero(lat<self.lat2)[0].min()-1)
             else:
                 self.j2 = int(np.nonzero(lat>self.lat2)[0].min() + 1)
         if hasattr(self,'lon1'):
-            self.i1 = int(np.nonzero(lon<=self.lon1)[-1].max()) 
+            if lon.min() >= self.lon1:
+                self.lon1 = lon.min()
+            else:
+                self.i1 = int(np.nonzero(lon<=self.lon1)[-1].max()) 
         if hasattr(self,'lon2'):
-            self.i2 = int(np.nonzero(lon>=self.lon2)[-1].min() + 1) 
-
+            if lon.max() <= self.lon2:
+                self.lon2 = lon.max()
+            else:
+                self.i2 = int(np.nonzero(lon>=self.lon2)[-1].min() + 1)
+            
     @property
     def shape(self):
         """Return the shape of the field"""
@@ -94,17 +138,23 @@ class Grid(object):
         if hasattr(self, "latvec"):
             self.latvec = self.latvec[self.j1:self.j2]
         if hasattr(self, "lonvec"):
-            self.lonvec = self.lonvec[self.i1:self.i2]                
+            self.lonvec = self.lonvec[self.i1:self.i2]
+        if self.flipped_y:
+            i2 = None if self.jmt == self.j2 else self.jmt-self.j2
+            self.ijslice_flip = (slice(self.jmt-self.j1, i2, -1),
+                                 slice(         self.i1,          self.i2,  1))
+        self.ijslice = (slice(self.j1,self.j2), slice(self.i1,self.i2))
         for var in ['depth', 'dxt', 'dyt',  'dxu', 'dyu',  'dzt',
                     'area',  'vol',  'llon', 'llat']:
             if hasattr(self,var):
-                self.__dict__[var] = self.__dict__[var][self.j1:self.j2,
-                                                        self.i1:self.i2]
-
+                setattr(self, var, getattr(self, var)[self.ijslice])
+        self.imt = self.i2 - self.i1
+        self.jmt = self.j2 - self.j1
+        
     def _timeparams(self, **kwargs):
         """Calculate time parameters from given values"""
         for key in kwargs.keys():
-            self.__dict__[key] = kwargs[key]
+            setattr(self, key, kwargs[key])
         if "date" in kwargs:
             self.jd = pl.datestr2num(kwargs['date'])
             self.jd = int(self.jd) if self.jd == int(self.jd) else self.jd
@@ -124,16 +174,16 @@ class Grid(object):
             if hasattr(self, 'defaultjd'):
                 self.jd = self.defaultjd
             else:
-                raise KeyError, "Time parameter missing"
+                raise KeyError("Time parameter missing")
         if hasattr(self,'hourlist'):
             dd = self.jd-int(self.jd)
             ddlist = np.array(self.hourlist).astype(float)/24
             ddpos = np.argmin(np.abs(ddlist-dd))
             self.jd = int(self.jd) + ddlist[ddpos]
         if self.jd < self.fulltvec.min():
-            raise ValueError, "Date before first available model date"
+            raise ValueError("Date before first available model date")
         if self.jd > self.fulltvec.max():
-            raise ValueError, "Date after last available model date"
+            raise ValueError("Date after last available model date")
         self._jd_to_dtm()
 
     def dx_approx(self):
@@ -168,8 +218,16 @@ class Grid(object):
             self._dy_approx = dy
         return self._dy_approx
 
-
     @property
+    def datadir(self):
+        return self._datadir
+
+    @datadir.setter
+    def datadir(self, path):
+        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+        self._datadir = path
+    
+    
     def datestr(self):
         jd = getattr(self, "jd", self.defaultjd)
         if type(jd) is int:
@@ -177,7 +235,6 @@ class Grid(object):
         else:
             return pl.num2date(jd).strftime("%Y-%m-%d %H:%M")
     
-        
     def _jd_to_dtm(self):
         dtobj = pl.num2date(self.jd)
         njattrlist = ['yr',  'mn',   'dy', 'hr',  'min',    'sec']
@@ -222,8 +279,8 @@ class Grid(object):
             xvec = self.kdivec = np.ravel(self.imat)
             yvec = self.kdjvec = np.ravel(self.jmat)
         else:
-            xvec = self.kdlonvec = np.ravel(self.llon)
-            yvec = self.kdlatvec = np.ravel(self.llat)
+            xvec = self.kdlonvec = self.llon.flat
+            yvec = self.kdlatvec = self.llat.flat
         if not mask is None: 
             xvec = xvec[~np.isnan(np.ravel(mask))]
             yvec = yvec[~np.isnan(np.ravel(mask))]
@@ -257,15 +314,15 @@ class Grid(object):
             print(fldvec[dpos])
         return fldvec
         
-    def ll2ij(self, lon, lat, mask=None, cutoff=None, nei=1, all_nei=False,
-              return_dist=False):
+    def ll2ij(self, lonvec, latvec, mask=None, cutoff=None,
+                  nei=1, all_nei=False, return_dist=False):
         """Reproject a lat-lon vector to i-j grid coordinates"""
         self.add_ij()
         if mask is not None:
             self.add_kd(mask)
         elif not hasattr(self, 'kd'):
             self.add_kd()
-        dist,ij = self.kd.query(list(np.vstack((lon,lat)).T), nei)
+        dist,ij = self.kd.query(list(np.vstack((lonvec, latvec)).T), nei)
         #if cutoff is not None:
         #    ij[dist>cutoff] = 0
         if nei == 1 :
@@ -325,43 +382,7 @@ class Grid(object):
         self.nj_mask = lonmsk & latmsk
         self.nj_ivec,self.nj_jvec = self.ll2ij(lonvec[self.nj_mask],
                                                latvec[self.nj_mask])
-    """
-    def reproject(self, nj_obj, field):
-        #Reproject a field of another njord inst. to the current grid
-        if not hasattr(self,'nj_ivec'):
-            self.add_njijvec(nj_obj)
-        field = getattr(nj_obj, field) if type(field) is str else field
-        
-        if hasattr(nj_obj, 'tvec') and (len(nj_obj.tvec) == field.shape[0]):
-            newfield = np.zeros(nj_obj.tvec.shape + self.llat.shape)
-            for tpos in range(len(nj_obj.tvec)):
-                newfield[tpos,:,:] = self.reproject(nj_obj, field[tpos,...])
-            return newfield
-
-        di = self.i2 - self.i1
-        dj = self.j2 - self.j1
-        xy = np.vstack((self.nj_jvec, self.nj_ivec))
-        if type(field) == str:
-            weights = np.ravel(nj_obj.__dict__[field])[self.nj_mask]
-        else:
-            weights = np.ravel(field)[self.nj_mask]
-        mask = ~np.isnan(weights) 
-        flat_coord = np.ravel_multi_index(xy[:,mask],(dj, di))
-        sums = np.bincount(flat_coord, weights[mask])
-        cnts = np.bincount(flat_coord)
-        fld = np.zeros((dj, di)) * np.nan
-        fld.flat[:len(sums)] = sums.astype(np.float)/cnts
-        try:
-            self.add_landmask()
-            fld[self.landmask] = np.nan
-        except:
-            print "Couldn't load landmask for %s" % self.projname
-        return fld
-    """
-
-
-
-
+  
     def reproject(self, nj_inst, field, roi=None):
         """Reproject a field of another njord inst. to the current grid"""
         field = getattr(nj_inst, field) if type(field) is str else field
@@ -412,17 +433,30 @@ class Grid(object):
 
     def retrive_file(self, url, local_filename=None, params=None):
         """Retrive file from remote server via http"""
-        spliturl = urlparse.urlsplit(url)
+        spliturl = urlsplit(url)
+        #spliturl = urllib.parse.urlsplit(url)
         if spliturl.scheme == "ftp":
             ftp = ftplib.FTP(spliturl.netloc) 
             ftp.login("anonymous", "njord@bror.us")
-            ftp.cwd(spliturl.path)
+            try:
+                ftp.cwd(os.path.split(spliturl.path)[0])
+            except ftplib.error_perm as e:
+                print (spliturl.netloc)
+                print (os.path.split(spliturl.path)[0])
+                print(err)
+                return False 
+
             ftp.retrbinary("RETR %s" % os.path.basename(local_filename),
                            open(local_filename, 'wb').write)
             ftp.quit()
+            return True
         else:
             print("downloading\n %s \nto\n %s" % (url, local_filename))
-            r = requests.get(url, params=params, stream=True,timeout=2)
+            try:
+                r = requests.get(url, params=params, stream=True,timeout=2)
+            except requests.ReadTimeout:
+                warnings.warn("Connection to server timed out.")
+                return False
             if r.ok:
                 if local_filename is None:
                     return r.text
@@ -456,17 +490,25 @@ class Grid(object):
         maxjd = getattr(self, "maxjd", int(pl.date2num(dtm.now())))
         return np.arange(minjd, maxjd+1)
 
+    @property
+    def yrvec(self):
+        return yrday.years(self.fulltvec)
+
+    @property
+    def mnvec(self):
+        return yrday.months(self.fulltvec)
+    
     def get_tvec(self, jd1, jd2):
         jd1 = pl.datestr2num(jd1) if type(jd1) is str else jd1
         jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
         tvec = self.fulltvec
         if jd1 < tvec.min():
-            raise ValueError, "jd1 too small"
+            raise ValueError("jd1 too small")
         if jd2 > tvec.max():
-            raise ValueError, "jd2 too large"
+            raise ValueError("jd2 too large")
         return tvec[(tvec >= jd1) & (tvec <= jd2)]
         
-    def timeseries(self, fieldname, jd1, jd2, mask=None):
+    def timeseries(self, fieldname, jd1, jd2, mask=None, **loadkwargs):
         """Create a timeseries of fields using mask to select data"""
         mask = mask if mask is not None else self.llat == self.llat
         self.tvec = self.get_tvec(jd1, jd2)
@@ -474,7 +516,7 @@ class Grid(object):
         for n,jd in enumerate(self.tvec):
             print(pl.num2date(jd), len(self.tvec) - n)
             try:
-                field[n,:,:] = self.get_field(fieldname, jd=jd).astype(np.float32)
+                field[n,:,:] = self.get_field(fieldname, jd=jd, **loadkwargs).astype(np.float32)
             except (KeyError, IOError):
                 field[n,:,:] = np.nan
             field[n, ~mask] = np.nan
@@ -548,7 +590,7 @@ class Grid(object):
         else:
             field = np.squeeze(fld)
         x,y = self.mp(self.llon, self.llat)
-        self.mp.pcolormesh(x,y,miv(field), **kwargs)
+        im = self.mp.pcolormesh(x,y,miv(field), **kwargs)
         self.mp.nice()
         if title is not None:
             pl.title(title)        
@@ -557,7 +599,7 @@ class Grid(object):
                 self.mp.colorbar(**colorbar)
             else:
                 self.mp.colorbar()
-
+        return im
 
     def contour(self,fld, *args, **kwargs):
         """Make a pcolor-plot of field"""
