@@ -7,11 +7,11 @@ import warnings
 import ftplib
 from urllib.parse import urlsplit
 import shelve
-from datetime import datetime as dtm
 import pathlib
 
 import numpy as np
 from scipy.spatial import cKDTree
+import netCDF4
 try:
     import pylab as pl
     import matplotlib as mpl
@@ -24,8 +24,9 @@ except (ImportError, RuntimeError):
     HAS_MATPLOTLIB = False
 
 import requests
+import click
 
-from njord.utils import lldist,yrday
+from njord.utils import lldist, yrday, time
 from njord import gmtgrid
 from njord import config
 
@@ -94,9 +95,9 @@ class Grid(object):
         """Calculate i1,i2,j1,j2 from lat and lon"""
         if hasattr(self, 'ijarea'):
             self.i1,self.i2,self.j1,self.j2 = getattr(self, 'ijarea')
-        for att,val in zip(['i1', 'i2', 'j1', 'j2'], [0,self.imt,0,self.jmt]): 
-            if not hasattr(self,att):
-                self.__dict__[att] = val
+        for key,val in zip(['i1', 'i2', 'j1', 'j2'], [0,self.imt,0,self.jmt]): 
+            if not hasattr(self, key):
+                setattr(self, key, val)
         if hasattr(self, 'latlon'):
             self.lon1,self.lon2,self.lat1,self.lat2 = getattr(self, 'latlon')
         
@@ -151,46 +152,29 @@ class Grid(object):
         self.imt = self.i2 - self.i1
         self.jmt = self.j2 - self.j1
         
-    def _timeparams(self, **kwargs):
+    def _timeparams(self, **time_kwargs):
         """Calculate time parameters from given values"""
-        for key in kwargs.keys():
-            setattr(self, key, kwargs[key])
-        if "date" in kwargs:
-            self.jd = pl.datestr2num(kwargs['date'])
-            self.jd = int(self.jd) if self.jd == int(self.jd) else self.jd
-        elif ('yd' in kwargs) & ('yr' in kwargs):
-            if self.yd < 1:
-                self.yr = self.yr -1
-                ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
-                         pl.date2num(dtm(self.yr,  1,  1))) + 1    
-                self.yd = ydmax + self.yd     
-            self.jd = self.yd + pl.date2num(dtm(self.yr,1,1)) - 1
-        elif  ('yr' in kwargs) & ('mn' in kwargs):
-            if not "dy" in kwargs:
-                kwargs["dy"] = 1
-                setattr(self, "dy", 1)
-            self.jd = pl.date2num(dtm(self.yr,self.mn,self.dy))
-        elif not 'jd' in kwargs:
-            if hasattr(self, 'defaultjd'):
-                self.jd = self.defaultjd
-            else:
-                raise KeyError("Time parameter missing")
-        if hasattr(self,'hourlist'):
-            dd = self.jd-int(self.jd)
-            ddlist = np.array(self.hourlist).astype(float)/24
-            ddpos = np.argmin(np.abs(ddlist-dd))
-            self.jd = int(self.jd) + ddlist[ddpos]
-        if self.jd < self.fulltvec.min():
+        tdict = time.expand_timeparams(self, **time_kwargs)
+        for key in tdict:
+            setattr(self, key, tdict[key])
+        if self.jd < self.minjd:
             raise ValueError("Date before first available model date")
-        if self.jd > self.fulltvec.max():
+        if self.jd > self.maxjd:
             raise ValueError("Date after last available model date")
-        self._jd_to_dtm()
 
+    def modeljd(self, jd):
+        return self.fulljdvec[self.fulljdvec <= jd].max()
+
+    def _model_timeparams(self, **time_kwargs):
+        tdict = time.expand_timeparams(self, **time_kwargs)
+        jd = self.modeljd(tdict["jd"])
+        self._timeparams(jd=jd)
+    
     def dx_approx(self):
         """Caclulate dx from llon and llat"""
         if not hasattr(self, "_dx_approx"):
             dx = self.llon * np.nan
-            for i in xrange(self.jmt):
+            for i in range(self.jmt):
                 latvec1 =  (self.llat[i,0:-2] + self.llat[i,1:-1]) / 2
                 latvec2 =  (self.llat[i,2:]   + self.llat[i,1:-1]) / 2
                 lonvec1 =  (self.llon[i,0:-2] + self.llon[i,1:-1]) / 2
@@ -206,7 +190,7 @@ class Grid(object):
         """Caclulate dy from llon and llat"""
         if not hasattr(self, "_dy_approx"):
             dy = self.llat * np.nan
-            for j in xrange(self.imt):
+            for j in range(self.imt):
                 latvec1 =  (self.llat[0:-2,j] + self.llat[1:-1,j]) / 2
                 latvec2 =  (self.llat[2:,j]   + self.llat[1:-1,j]) / 2
                 lonvec1 =  (self.llon[0:-2,j] + self.llon[1:-1,j]) / 2
@@ -227,22 +211,6 @@ class Grid(object):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
         self._datadir = path
     
-    
-    def datestr(self):
-        jd = getattr(self, "jd", self.defaultjd)
-        if type(jd) is int:
-            return pl.num2date(jd).strftime("%Y-%m-%d")
-        else:
-            return pl.num2date(jd).strftime("%Y-%m-%d %H:%M")
-    
-    def _jd_to_dtm(self):
-        dtobj = pl.num2date(self.jd)
-        njattrlist = ['yr',  'mn',   'dy', 'hr',  'min',    'sec']
-        dtattrlist = ['year','month','day','hour','minute', 'second']
-        for njattr,dtattr in zip(njattrlist, dtattrlist):
-            setattr(self, njattr, getattr(dtobj, dtattr))
-        self.yd = self.jd - pl.date2num(dtm(self.yr,1,1)) + 1
-
     def _calcload(self, fldname, **kwargs):
         if fldname == "uv":
             self.load('u', **kwargs)
@@ -431,29 +399,60 @@ class Grid(object):
         self.load(field, **kwargs)
         return self.__dict__[field]
 
-    def retrive_file(self, url, local_filename=None, params=None):
-        """Retrive file from remote server via http"""
+    def isncfile(self, filename):
+        if not os.path.isfile(filename):
+            return False
+        try:
+            netCDF4.Dataset(filename)
+            return True
+        except:
+            os.unlink(filename)
+            return False
+
+    def retrive_file(self, url, local_filename=None,username=None,params=None):
+        """Retrive file from remote server via http
+
+        https://stackoverflow.com/questions/51684008
+        """
         spliturl = urlsplit(url)
+        self.vprint(spliturl)
         #spliturl = urllib.parse.urlsplit(url)
         if spliturl.scheme == "ftp":
-            ftp = ftplib.FTP(spliturl.netloc) 
-            ftp.login("anonymous", "njord@bror.us")
             try:
-                ftp.cwd(os.path.split(spliturl.path)[0])
-            except ftplib.error_perm as e:
+                ftp = ftplib.FTP(spliturl.netloc) 
+                self.vprint(ftp.login(self.ftpuser, self.ftpasswd))
+                ftpdir = spliturl.path
+                self.vprint("Change dir to '%s'" % ftpdir)
+                self.vprint(ftp.cwd(ftpdir))
+            except ftplib.error_perm as err:
                 print (spliturl.netloc)
                 print (os.path.split(spliturl.path)[0])
-                print(err)
-                return False 
+                raise IOError(err)
 
-            ftp.retrbinary("RETR %s" % os.path.basename(local_filename),
-                           open(local_filename, 'wb').write)
+            #self.vprint(local_filename)
+            lfn = os.path.basename(local_filename)
+            if not lfn in ftp.nlst():
+                print(ftp.nlst())
+                raise ftplib.Error("'%s' is not the ftp server" % lfn)
+            with open(local_filename, 'wb') as lfh:
+                ftp.voidcmd('TYPE I')
+                length = ftp.size(lfn)
+                short_lfn = lfn if len(lfn)<18 else lfn[:9] + "..." + lfn[-9:]
+                with click.progressbar(length=length, label=short_lfn) as bar:
+                    def file_write(data):
+                        lfh.write(data) 
+                        bar.update(len(data))
+                    try:
+                        ftp.retrbinary("RETR %s" % lfn, file_write)
+                    except ftplib.error_perm as err:
+                        os.unlink(local_filename)
+                        raise IOError(err)
             ftp.quit()
             return True
         else:
             print("downloading\n %s \nto\n %s" % (url, local_filename))
             try:
-                r = requests.get(url, params=params, stream=True,timeout=2)
+                r = requests.get(url, params=params, stream=True, timeout=2)
             except requests.ReadTimeout:
                 warnings.warn("Connection to server timed out.")
                 return False
@@ -463,18 +462,13 @@ class Grid(object):
                 else:
                     with open(local_filename, 'wb') as f:
                         for chunk in r.iter_content(chunk_size=1024): 
-                            if chunk: # filter out keep-alive new chunks
+                            if chunk:
                                 f.write(chunk)
                                 f.flush()
                     return True
             else:
                 warnings.warn("Could not download file from server")
                 return False
-
-    def get_landmask(self):
-        if not hasattr(self,'landmask'):
-            self.add_landmask()
-        return self.landmask
 
     def fatten_landmask(self):
         if not hasattr(self,'landmask'): self.add_landmask()
@@ -485,23 +479,26 @@ class Grid(object):
             self.landmask[ii+i,jj+j]=0
 
     @property
-    def fulltvec(self):
-        minjd = getattr(self, "minjd", 0)
-        maxjd = getattr(self, "maxjd", int(pl.date2num(dtm.now())))
-        return np.arange(minjd, maxjd+1)
+    def fulljdvec(self):
+        if self.fldsperday != 1:
+            fpd = self.fldsperday
+            return np.arange(self.minjd*fpd, self.maxjd*fpd + 1)/fpd
+        else:
+            dpf = self.daysperfld
+        return np.arange(self.minjd, self.maxjd+dpf, dpf)
 
     @property
     def yrvec(self):
-        return yrday.years(self.fulltvec)
+        return yrday.years(self.fulljdvec)
 
     @property
     def mnvec(self):
-        return yrday.months(self.fulltvec)
+        return yrday.months(self.fulljdvec)
     
     def get_tvec(self, jd1, jd2):
         jd1 = pl.datestr2num(jd1) if type(jd1) is str else jd1
         jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
-        tvec = self.fulltvec
+        tvec = self.fulljdvec
         if jd1 < tvec.min():
             raise ValueError("jd1 too small")
         if jd2 > tvec.max():
@@ -516,7 +513,8 @@ class Grid(object):
         for n,jd in enumerate(self.tvec):
             print(pl.num2date(jd), len(self.tvec) - n)
             try:
-                field[n,:,:] = self.get_field(fieldname, jd=jd, **loadkwargs).astype(np.float32)
+                field[n,:,:] = self.get_field(
+                    fieldname, jd=jd, **loadkwargs).astype(np.float32)
             except (KeyError, IOError):
                 field[n,:,:] = np.nan
             field[n, ~mask] = np.nan

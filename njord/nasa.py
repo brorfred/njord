@@ -23,7 +23,6 @@ class Base(base.Grid):
         self.datadir = '%s/%s%s/' % (self.datadir, self.fp, self.res)
         if not os.path.isdir(self.datadir):
             os.makedirs(self.datadir)
-        self.only_npz = kwargs.get('only_npz', False)
         if not hasattr(self, "maxjd"):
             self.maxjd = int(pl.date2num(dtm.now())) - 3
 
@@ -208,7 +207,6 @@ class Base(base.Grid):
         #self.date   = pl.num2date(self.jd)
         return field
 
-    
     @property
     def fieldlist(self):
         return self.vc.keys()

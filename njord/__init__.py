@@ -14,3 +14,6 @@ __all__ = ["ghrsst", "mimoc", "smos", "globcolour", "mldclim",
            "cesm", "landmask", "winds", "oscar", "woa", "ecco", "mati", 
            "poseidon", "worldclim", "gebco", "rutgers"]
 
+
+from .cci    import OceanColor
+from .ghrsst import L4_K10 as SST
