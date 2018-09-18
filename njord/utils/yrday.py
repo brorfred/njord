@@ -1,7 +1,11 @@
 
 import numpy as np
-import pylab as pl
-
+try:
+    import pylab as pl
+    HAS_MATPLOTLIB = True
+except:
+    HAS_MATPLOTLIB = False
+    
 bore_ydmn    = np.cumsum(np.array([0,31,28,31,30,31,30,31,31,30,31,30]))
 astr_ydmn =  np.cumsum(np.array([0,31,31,30,31,30,31,28,31,30,31,30]))-182.5
 
