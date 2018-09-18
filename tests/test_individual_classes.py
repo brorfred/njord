@@ -22,7 +22,7 @@ def grid_attributes(obj):
     assert obj.llat.shape[0] == obj.j2 - obj.j1
 
 def config_attributes(obj):
-    for attr in ["defaultjd", "minjd","maxjd","fieldlist","map_region", "djd"]:
+    for attr in ["defaultjd", "minjd","maxjd","fieldlist","map_region"]:
         assert hasattr(obj, attr)
 
 def setup_object(modulename, classname, **kwargs):
@@ -74,3 +74,12 @@ def test_L4CMC():
         ns = setup_object("ghrsst", "L4CMC", **llbox)
         assert ns.shape == (103, 101)
 
+
+def test_cci():
+        ns = setup_object("cci", "OceanColor")
+        ns = setup_object("cci", "OceanColor", **llbox)
+        assert ns.shape == (482, 482)
+
+        for timetype in ns.timetypelist:
+            ns.load(timetype=timetype)
+            ns.chl.shape == (482, 482)
