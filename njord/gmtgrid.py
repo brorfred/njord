@@ -19,13 +19,15 @@ class Shift:
     
     def field(self, fld):
         """Convert a field to GMT grid. """
+        if not self.lonvec.shape[0] in fld.shape:
+            raise IndexError("Use full field when moving the center meridian")
         axis = np.nonzero(np.array(fld.shape) == len(self.lonvec))[0][0]
         if self.idim == 1:
             fld = np.squeeze(fld)
             if fld.shape[axis] == self.imt:
                 return np.roll(fld,self.imt-self.gmtpos,axis=axis)
             else:
-                raise ValueError, "Lonvec and iaxis of field not of same length"
+                raise ValueError("Lonvec and iaxis of field not of same length")
 
 class GridError(Exception):
     """Exception raised if Shift can't find a minimum"""
