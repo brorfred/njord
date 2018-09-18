@@ -1,13 +1,13 @@
 import os
 import json
-import ConfigParser
+from configparser import ConfigParser
 
 def load(filepref, projname, kwargs={}):
     """Read and parse the config file"""
     preset_dict = {}
     basedir =  os.path.dirname(os.path.abspath(__file__))
 
-    cfg = ConfigParser.ConfigParser()
+    cfg = ConfigParser()
     files = ["%s/%s.cfg" %  (os.curdir, filepref),
              "%s/.%s.cfg" % (os.path.expanduser("~"), filepref),
              "%s/%s.cfg" %  (basedir, filepref)]
