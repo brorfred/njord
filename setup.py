@@ -25,7 +25,7 @@ setup(name = 'njord',
                           "click>=6.0",
                           "keyring>=13",
                           "six>1"],
-      packages = ['njord','njord.utils'],
+      packages = ['njord','njord.utils', 'njord.utils.cbook'],
       scripts = ["njord/njordstatus",],
       package_data = {'njord': ['njord.cfg']},
      )
