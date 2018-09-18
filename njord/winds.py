@@ -12,7 +12,7 @@ import bs4
 import requests
 
 from . import base
-from . import gmtgrid
+from njord.utils import gmtgrid
 
 class Seawinds(base.Grid):
     """Read jpl Seawinds fields"""

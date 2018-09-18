@@ -9,7 +9,7 @@ if six.PY2:
 
 
 __all__ = ["ghrsst", "mimoc", "smos", "globcolour", "mldclim", 
-           "avhrr", "gmtgrid", "nasa", "strang", "gompom", "fvcom", 
+           "avhrr", "nasa", "strang", "gompom", "fvcom", 
            "bem", "hycom", "ncep", "topaz", "bgccsm", "jpl", 
            "cesm", "landmask", "winds", "oscar", "woa", "ecco", "mati", 
            "poseidon", "worldclim", "gebco", "rutgers"]

@@ -26,8 +26,7 @@ except (ImportError, RuntimeError):
 import requests
 import click
 
-from njord.utils import lldist, yrday, time
-from njord import gmtgrid
+from njord.utils import lldist, yrday, time, gmtgrid
 from njord import config
 
 try:
