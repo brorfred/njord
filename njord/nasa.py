@@ -55,9 +55,10 @@ class Base(base.Grid):
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                  pl.date2num(dtm(self.yr,  1,  1))) + 1
         if fldtype == "MC":
-            self.add_mnclim()
+            if not hasattr(self, "mc_datedict"):
+                self.add_mnclim()
             datestr = self.mc_datedict[self.mn]
-        if "mo" in fldtype.lower():
+        elif "mo" in fldtype.lower():
             self.add_filepreflist(fldtype="mo")
             datestr = self.mo_fileprefs[self.yr*100 + self.mn]
         elif fldtype == "DAY":
@@ -80,18 +81,21 @@ class Base(base.Grid):
                 else:
                     return os.path.basename(flist[-1])
         else:
-            raise TypeError("File typ%s not implemented" % fldtype)
+            raise TypeError(f"File type {fldtype} not implemented")
         return stamp % (self.fp, datestr, fldtype, self.vc[fld], self.res[0])
 
     def _retrieve_datestamps(self, path, ext=".nc"):
         """Retrive datestamps for all files in dir on GSFC server"""
         url = "https://%s/%s" % (self.gsfc_host, path)
         datelist = []
-        bs = BeautifulSoup(requests.get(url, timeout=1).content, "html.parser")
+        bs = BeautifulSoup(
+            requests.get(url, timeout=1).content, "html.parser")
         for td in bs.find_all("td"):
             if td.a is not None:
                 datelist.append(
                     (urlparse(td.a.attrs["href"]).path.split("/")[-1][1:15]))
+        if len(datelist) == 0:
+            raise RuntimeError(f"No files found at {url}")
         return datelist
 
     def refresh(self, fld, fldtype="DAY", jd1=None, jd2=None, delall=False):
@@ -185,7 +189,7 @@ class Base(base.Grid):
         """Download a missing file from GSFC's website"""
         self.retrive_file(self.fileurl(filename), local_filename=filename)
         if not os.path.isfile(filename):
-            print("------------- Download failed!!! -------------""")
+            print("------------- Download failed! -------------""")
 
     def _l3read_nc4(self, fld, nan=np.nan):
         self.vprint( "Reading netCDF4 file")
@@ -284,7 +288,7 @@ class CZCS(Base):
         """Add a dict with filename variable components"""
         return {'k49':'KD490_Kd_490', 'chl':'CHL_chlor_a'}
 
-        
+    
 class VIIRS(Base):
     def __init__(self, res="9km", **kwargs):
         self.res = res        

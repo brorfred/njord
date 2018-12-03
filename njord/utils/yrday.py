@@ -31,21 +31,21 @@ def date(jd):
     jd = np.array(jd)
     part = jd - jd.astype(np.int)
     l = jd.astype(np.int)+68569 + 1721425
-    n = 4*l/146097
-    l = l-(146097*n+3)/4
-    yr = 4000*(l+1)/1461001
-    l = l-1461*yr/4+31
-    mn = 80*l/2447
-    dy = l-2447*mn/80
-    l = mn/11
-    mn = mn+2-12*l
-    yr = 100*(n-49)+yr+l
+    n = 4 * l // 146097
+    l = l - (146097*n + 3) // 4
+    yr = 4000*(l + 1) // 1461001
+    l = l - 1461*yr//4 + 31
+    mn = 80 * l//2447
+    dy = l - 2447*mn // 80
+    l = mn // 11
+    mn = mn + 2 - 12*l
+    yr = 100 * (n-49) + yr + l
     return yr,mn,dy,part
 
 def jd(yr, mn, dy):
-    return (dy - 32075 + 1461 * (yr + 4800 + (mn - 14) / 12) / 4 +
-            367 * (mn - 2 - (mn - 14) / 12 * 12) / 12 -
-            3 * ((yr + 4900 + (mn - 14) / 12) / 100) / 4) - 1721427.0
+    return (dy - 32075 + 1461 * (yr + 4800 + (mn - 14) // 12) // 4 +
+            367 * (mn - 2 - (mn - 14) // 12 * 12) // 12 -
+            3 * ((yr + 4900 + (mn - 14) // 12) // 100) // 4) - 1721427.0
 
 def yd(jd):
     """Calculate year day from julian date. """

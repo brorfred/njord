@@ -29,9 +29,9 @@ def manuscript():
     mpl.rcParams['axes.labelsize']  = 'x-large' 
     mpl.rcParams['axes.labelcolor'] = 'black'
     mpl.rcParams['axes.axisbelow']  = True 
-    mpl.rcParams['axes.color_cycle'] = ['348ABD', 'A60628', '7A68A6',
-                                        '467821', 'CF4457', '188487',
-                                        'E24A33']
+    #mpl.rcParams['axes.color_cycle'] = ['348ABD', 'A60628', '7A68A6',
+    #                                    '467821', 'CF4457', '188487',
+    #                                    'E24A33']
 
     mpl.rcParams['xtick.major.size'] = 4
     mpl.rcParams['xtick.minor.size'] = 2

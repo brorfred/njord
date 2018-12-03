@@ -168,9 +168,9 @@ class Grid(object):
         tdict = time.expand_timeparams(self, **time_kwargs)
         jd = self.modeljd(tdict["jd"])
         self._timeparams(jd=jd)
-    
+        
     def dx_approx(self):
-        """Caclulate dx from llon and llat"""
+        """Calculate dx from llon and llat"""
         if not hasattr(self, "_dx_approx"):
             dx = self.llon * np.nan
             for i in range(self.jmt):
