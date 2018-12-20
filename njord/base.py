@@ -78,8 +78,12 @@ class Grid(object):
         if not os.path.isdir(self.datadir):
             os.makedirs(self.datadir)
 
-        self.missing_fields = shelve.open(
-            os.path.join(self.datadir, "missing_files.dbm"), writeback=True)
+        try:
+            self.missing_fields = shelve.open(
+                os.path.join(self.datadir, "missing_files.dbm"),
+                             writeback=True)
+        except:
+            pass
 
         self.setup_grid()
         if hasattr(self, "imt"):
@@ -100,8 +104,8 @@ class Grid(object):
         if hasattr(self, 'latlon'):
             self.lon1,self.lon2,self.lat1,self.lat2 = getattr(self, 'latlon')
         
-        lat = self.llat if hasattr(self, 'llat') else self.latvec[:, np.newaxis]
-        lon = self.llon if hasattr(self, 'llon') else self.lonvec[np.newaxis, :]
+        lat = self.llat if hasattr(self,'llat') else self.latvec[:,np.newaxis]
+        lon = self.llon if hasattr(self,'llon') else self.lonvec[np.newaxis,:]
         if hasattr(self,'lat1'):
             if lat.min() >= self.lat1:
                 self.lat1 = lat.min()
@@ -331,9 +335,9 @@ class Grid(object):
                     continue
                 #fldvec[days, mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
                 if ivec.ndim == 2:
-                    fldvec[days, mask] = np.nanmean(fld[jvec, ivec], axis=1)[mask]
+                    fldvec[days,mask] = np.nanmean(fld[jvec,ivec], axis=1)[mask]
                 else:
-                    fldvec[days, mask] = fld[jvec[mask], ivec[mask]]
+                    fldvec[days,mask] = fld[jvec[mask], ivec[mask]]
         return np.squeeze(fldvec)
             
     def add_ij2ij(self, njord_obj):
@@ -361,7 +365,6 @@ class Grid(object):
                 newfield[tpos,:,:] = self.reproject(nj_obj, field[tpos,...])
             return newfield
         """
-        
         if not hasattr(self, "_prdef"):
             self._prdef = pr.geometry.GridDefinition(lons=self.llon,
                                                      lats=self.llat)
