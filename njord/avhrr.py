@@ -1,6 +1,6 @@
 import os, os.path
 import subprocess as sbp
-#from datetime import datetime as dtm
+from datetime import datetime as dtm
 import urllib
 #import urllib2
 #import re
@@ -11,22 +11,22 @@ import netCDF4
 
 import base
 
-ZIPCMD = "pbzip2"
-
 class AVHRR(base.Grid):
 
     def __init__(self, **kwargs):
+        if not hasattr(self, "maxjd"):
+            self.maxjd = int(pl.date2num(dtm.now())) - 7
         super(AVHRR, self).__init__(**kwargs)
         self.lat = self.llat[:,0]
         self.lon = self.llon[0,:]
         self.only_npz = kwargs.get('only_npz', False)
+        self.fieldlist = ["sst", "temp"]
 
     def setup_grid(self):
         """Create matrices with latitudes and longitudes for the t-coords"""
         if not os.path.isfile(self.gridfile):
-            print gridfile
+            print(f"the gridfile {self.gridfile} is missing, downloading.")
             self.download(self.defaultjd)
-            self._try_to_unzip(gridfile)
         gr = netCDF4.Dataset(self.gridfile)
         self.lonvec = gr.variables["lon"][:].copy()
         self.latvec = gr.variables["lat"][:].copy()
@@ -34,11 +34,11 @@ class AVHRR(base.Grid):
         self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
         self.llon = np.roll(self.llon,720)
         
-    def gen_filename(self, jd):
+    def generate_filename(self, jd):
         """Generate filename"""
         self._timeparams(jd=jd)
-        filestub = "%i/AVHRR/avhrr-only-v2.%i%02i%02i.nc"
-        return filestub % (self.yr, self.yr, self.mn, self.dy)
+        filestub = "avhrr-only-v2.%i%02i%02i.nc"
+        return filestub % (self.yr, self.mn, self.dy)
             
     def refresh(self, jd1=None, jd2=None):
         """ Read a L3 mapped file and add field to current instance"""
@@ -46,13 +46,13 @@ class AVHRR(base.Grid):
         jd2 = int(pl.date2num(dtm.now())) - 1  if jd2 is None else jd2
         for jd in np.arange(jd1, jd2+1):
             filename = os.path.join(self.datadir, self.generate_filename(jd))
-            print " --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d')
-            print "Checking %s" % filename + '.bz2'
-            if not os.path.isfile(filename + '.bz2'):
+            print(" --- %s --- " % pl.num2date(jd).strftime('%Y-%m-%d'))
+            print("Checking %s" % filename)
+            if not os.path.isfile(filename):
                 try:
                     self.load(jd=jd, verbose=True)
                 except IOError:
-                    print "Downloading failed. Trying to remove old files."
+                    print("Downloading failed. Trying to remove old files.")
                     try:
                         os.remove(filename)
                     except:
@@ -66,37 +66,27 @@ class AVHRR(base.Grid):
                     except:
                         print ("   ###   Warning! Failed to add %s   ###" %
                                os.path.basename(filename))
-                print "\n"
+                print("\n")
             else:
-                print "found"
+                print("found")
              
     def load(self, fld="sst", **kwargs):
         """Load the satellite field associated with a given time."""
+        if fld == "temp":
+            self.load(fld="sst", **kwargs)
+            self.temp = self.sst
         self._timeparams(**kwargs)
         self.vprint( "load jd=%f" % self.jd)
-        self.filename = os.path.join(self.datadir,self.gen_filename(self.jd))
+        self.filename = os.path.join(
+            self.datadir,self.generate_filename(self.jd))
         self.vprint( "Filename is %s" % (self.filename))
-        """
-        zipfname = self.filename + '.bz2'
-        if not (os.path.isfile(self.filename) | os.path.isfile(zipfname)):
-            print "File missing, downloading from GSFC"
-            if not self.download(self.jd):
-              print "File not on server, bailing"
-              if hasattr(self, 'sst'):
-                  del self.sst
-              return False
-        try:
-            zipped = self._try_to_unzip(self.filename)
-        except:
-            return False
-        """
         nc = netCDF4.Dataset(self.filename)
-        nc.set_auto_mask("False")
-        field = np.roll(np.squeeze(nc.variables["sst"]), 720)
-        field[field<-100] = np.nan
-        self.sst = (np.squeeze(field) / 10.)[self.j1:self.j2, self.i1:self.i2]
-        #self._try_to_zip(zipped)
-        return True
+        raw = nc.variables["sst"][:]
+        fld = raw.data
+        fld[raw.mask] = np.nan
+        fld = np.roll(np.squeeze(fld), 720)
+        self.sst = np.squeeze(fld)[self.j1:self.j2, self.i1:self.i2]
+        return None
 
     def timestat(self, jd1, jd2):
         """Create a time-mean of field"""
@@ -121,35 +111,7 @@ class AVHRR(base.Grid):
     def download(self, jd):
         """Download a missing file from NODC"""
         self._timeparams(jd=jd)
-        url = "%s/%04i/%03i/" % (self.dataurl, self.yr, self.yd)
-        filename = self.generate_filename(jd) + ".bz2"
+        url = f"{self.dataurl}/{self.yr}{self.mn:02}/"
+        filename = self.generate_filename(jd)
         self.vprint("Downloading %s" % url+filename)
         return self.retrive_file(url+filename, self.datadir + filename)
-
-    def _try_to_unzip(self, filename):
-        """Unzip file if exists and and is a valid bzip2 file"""
-        if not os.path.isfile(filename):
-            zipfname = filename + ".bz2"
-            self.vprint( "Trying to uncompress file %s" % zipfname)
-            err = sbp.call([ZIPCMD, "-d", zipfname])
-            if err == 1:
-                print "Decompression of " + zipfname + " failed."
-                print "Trying to download again"
-                self.download(self.jd)
-                err = sbp.call([ZIPCMD, "-d", zipfname])
-                if err == 1:
-                    raise IOError, "Download file failed."
-            return True
-        else:
-            return False
-
-    def _try_to_zip(self, zipped):
-        if zipped:
-            self.vprint( "Compressing file")
-            err = sbp.call([ZIPCMD, self.filename])
-            if err ==1 :
-                raise IOError( "Compression of " + self.filename + " failed.")
-
-
-
-
