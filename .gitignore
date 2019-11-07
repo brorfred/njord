@@ -69,3 +69,4 @@ Backup[ ]of[ ]*.numbers/
 
 .tmux.conf
 .tramp_history
+.vscode
