@@ -80,7 +80,7 @@ class Rutgers(base.Grid):
         else:
             filename = self.jd2filename(self.jd)
             if not os.path.isfile(filename):
-                print "File missing"
+                print("File missing")
                 url = urlparse.urljoin(self.dataurl,os.path.basename(filename))
                 self.retrive_file(url, filename)
             with Dataset(filename) as nc:
