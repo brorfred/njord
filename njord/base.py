@@ -139,15 +139,19 @@ class Grid(object):
     def _set_maxmin_ij(self):
         """Set a potential sub region of the grid if defined """
         self._llboundaries_to_ij()
+        if self.flipped_y:
+            j1 = self.j2 #self.jmt-self.j1
+            j2 = self.j1 #None if self.jmt == self.j2 else self.jmt-self.j2
+            dj = -1
+        else:
+            j1 = self.j1
+            j2 = self.j2
+            dj = 1
         if hasattr(self, "latvec"):
-            self.latvec = self.latvec[self.j1:self.j2]
+            self.latvec = self.latvec[j1:j2:dj]
         if hasattr(self, "lonvec"):
             self.lonvec = self.lonvec[self.i1:self.i2]
-        if self.flipped_y:
-            i2 = None if self.jmt == self.j2 else self.jmt-self.j2
-            self.ijslice_flip = (slice(self.jmt-self.j1, i2, -1),
-                                 slice(         self.i1,          self.i2,  1))
-        self.ijslice = (slice(self.j1,self.j2), slice(self.i1,self.i2))
+        self.ijslice = (slice(j1, j2, dj), slice(self.i1, self.i2,  1))
         for var in ['depth', 'dxt', 'dyt',  'dxu', 'dyu',  'dzt',
                     'area',  'vol',  'llon', 'llat']:
             if hasattr(self,var):

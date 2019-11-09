@@ -14,6 +14,7 @@ import njord.utils.mpl_dates as pl
 from netCDF4 import Dataset
 
 from njord import base
+#import base
 from njord.utils import yrday
 
 class Base(base.Grid):
@@ -54,7 +55,7 @@ class Base(base.Grid):
             self._timeparams(**kwargs)
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                  pl.date2num(dtm(self.yr,  1,  1))) + 1
-        if fldtype == "MC":
+        if fldtype.lower() == "mc":
             if not hasattr(self, "mc_datedict"):
                 self.add_mnclim()
             datestr = self.mc_datedict[self.mn]
@@ -155,24 +156,40 @@ class Base(base.Grid):
     
     def add_mnclim(self):
         """Add a list with file name dates for Monthly climatologies"""
-        datelist = self._retrieve_datestamps(self.mc_url_9km)
+        """
+        datelist = self._retrieve_datestamps(getattr(self, f"mc_url_{self.res}"))
         self.mc_datedict = {}
         for dstr in datelist[1:]:
             mn,_ = yrday.mndy(int(dstr[:4]),int(dstr[4:7]))
             self.mc_datedict[mn] = dstr
+        """
+        tvec = np.array(
+            self._retrieve_datestamps(getattr(self, f"mc_url_{self.res}")))
+        yrvec = np.array([int(tstr[0:4]) for tstr in tvec]) 
+        ydvec = np.array([int(tstr[4:7]) for tstr in tvec])
+        mnvec,_ = yrday.mndy(yrvec, ydvec) 
+        self.mc_datedict = {}
+        for mn in range(1,13):
+            mnpart = tvec[mnvec==mn]
+            maxpos = np.argmax([t[7:14] for t in mnpart])
+            self.mc_datedict[mn] = mnpart[maxpos]
 
     def add_filepreflist(self, fldtype="MC"):
         """Add a list with file name dates for Monthly climatologies"""
         if hasattr(self, "%s_fileprefs" % fldtype):
             return
-
         predict = {}
         if "mc" in fldtype.lower():
-            datelist = self._retrieve_datestamps(self.mc_url_9km)
+            tvec = np.array(
+                self._retrieve_datestamps(getattr(self, f"mc_url_{self.res}")))
+            yrvec = np.array([int(tstr[0:4]) for tstr in tvec]) 
+            ydvec = np.array([int(tstr[4:7]) for tstr in tvec])
+            mnvec,_ = yrday.mndy(yrvec, ydvec) 
             self.mc_datedict = {}
-            for dstr in datelist[1:]:
-                mn,_ = yrday.mndy(int(dstr[:4]),int(dstr[4:7]))
-                self.mc_datedict[mn] = dstr
+            for mn in range(1,13):
+                mnpart = tvec[mnvec==mn]
+                maxpos = np.argmax([t[7:14] for t in mnpart])
+                self.mc_datedict[mn] = mnpart[maxpos]
         elif "mo" in fldtype.lower():
             datelist = self._retrieve_datestamps(self.mo_url_9km)
             for dstr in datelist[1:]:
@@ -181,7 +198,6 @@ class Base(base.Grid):
                 predict[yr*100 + mn] = dstr
         setattr(self, "%s_fileprefs" % fldtype, predict)
         
-
     def fileurl(self, filename):
         return "%s%s" % (self.dataurl, os.path.basename(filename))
         
@@ -199,7 +215,7 @@ class Base(base.Grid):
         nc.set_auto_scale(True)
         
         var = nc.variables[list(nc.variables.keys())[0]]
-        raw = var[self.ijslice_flip]
+        raw = var[self.ijslice]
         if not hasattr(raw, "mask"):
             return self.llon * np.nan
         field = raw.data
