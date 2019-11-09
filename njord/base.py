@@ -117,7 +117,7 @@ class Grid(object):
             if lat.max() <= self.lat2:
                 self.lat2 = lat.max()
             elif lat[-1,0] < lat[0,0]: 
-                self.j1 = int(np.nonzero(lat<self.lat2)[0].min()-1)
+                self.j1 = int(np.nonzero(lat<self.lat2)[0].min()-2)
             else:
                 self.j2 = int(np.nonzero(lat>self.lat2)[0].min() + 1)
         if hasattr(self,'lon1'):
@@ -141,11 +141,11 @@ class Grid(object):
         self._llboundaries_to_ij()
         if self.flipped_y:
             j1 = self.j2 #self.jmt-self.j1
-            j2 = self.j1 #None if self.jmt == self.j2 else self.jmt-self.j2
+            j2 = None if self.j1 == 0 else self.j1
             dj = -1
         else:
             j1 = self.j1
-            j2 = self.j2
+            j2 = None if self.j1 == self.imt else self.j2
             dj = 1
         if hasattr(self, "latvec"):
             self.latvec = self.latvec[j1:j2:dj]

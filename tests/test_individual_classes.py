@@ -17,6 +17,9 @@ def grid_attributes(obj):
     if not hasattr(obj, "_partial_grid"):
         assert obj.landmask[0,0] == True
         assert obj.landmask[obj.jmt//2, obj.imt//2] == False
+
+    assert obj.llon[0, -1] > obj.llon[0, 0]
+    assert obj.llat[-1, 0] > obj.llat[0, 0]
     
     assert obj.llon.shape[1] == obj.i2 - obj.i1
     assert obj.llat.shape[0] == obj.j2 - obj.j1

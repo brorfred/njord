@@ -40,7 +40,7 @@ class Base(base.Grid):
         incr  = 360.0/imt
         jR    = np.arange(j0t, jmt)
         iR    = np.arange(i0t, imt)
-        self.latvec = (  90 - jR*incr - incr/2)[::-1]
+        self.latvec = (  90 - jR*incr - incr/2)
         self.lonvec = (-180 + iR*incr + incr/2)
         self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
         self.imt = imt
