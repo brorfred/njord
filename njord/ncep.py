@@ -5,7 +5,7 @@ import numpy as np
 import pylab as pl
 from scipy.io import netcdf_file
 
-import base
+from njord import base
 import gmtgrid
 
 class Daily(base.Grid):
