@@ -27,6 +27,8 @@ def grid_attributes(obj):
 def config_attributes(obj):
     for attr in ["defaultjd", "minjd","maxjd","fieldlist","map_region"]:
         assert hasattr(obj, attr)
+    for attr in ["flipped_y", ]:
+        assert type(getattr(obj, attr)) == bool
 
 def setup_object(modulename, classname, **kwargs):
     clss = getattr(importlib.import_module("njord.%s" % modulename), classname)
@@ -57,10 +59,10 @@ def test_seawinds():
         ns = setup_object("winds", "Seawinds", **llbox)
         assert ns.shape == (83, 81)
 
-def test_ccmp():
-        ns = setup_object("winds", "CCMP")
-        ns = setup_object("winds", "CCMP", **llbox)
-        assert ns.shape == (82, 82)
+#def test_ccmp():
+#        ns = setup_object("winds", "CCMP")
+#        ns = setup_object("winds", "CCMP", **llbox)
+#        assert ns.shape == (82, 82)
         
 def test_ncep():
         ns = setup_object("winds", "NCEP")

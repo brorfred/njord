@@ -200,14 +200,14 @@ class NCEP(base.Grid):
         raw = self.gmt.field(nc.variables[field][tpos,...])
         fld = raw.data
         fld[raw.mask] = np.nan
-        setattr(self, field, fld[self.ijslice_flip])
+        setattr(self, field, fld[self.ijslice])
 
     @property
     def landmask(self):
         if not hasattr(self, "_landmask"):
             gc = netCDF4.Dataset(self.gridfile)
             _landmask = gc.variables["land"][0,...].astype(bool)
-            self._landmask = self.gmt.field(_landmask)[self.ijslice_flip]
+            self._landmask = self.gmt.field(_landmask)[::-1,:][self.ijslice]
         return self._landmask
 
 
