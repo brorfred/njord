@@ -35,6 +35,29 @@ class Base(nasa.Base):
         self.latvec = nc.variables["lat"][:].data
         self.llon,self.llat = np.meshgrid(self.lonvec, self.latvec)
         
+    def _get_timetype_dict(self, raw_timetype):
+        if "5" in raw_timetype:
+            timetype = "5day"
+            ttype = "5D_DAILY"
+            jd5dvec = np.arange(0,365,5) + pl.date2num(dtm(self.yr, 1, 1))
+            dt = pl.num2date(jd5dvec[self.jd>=jd5dvec].max())
+            datestr = dt.strftime("%Y%m%d")
+        elif "8" in raw_timetype:
+            timetype = "8day"
+            ttype = "8D_DAILY"
+            jd8dvec = np.arange(0,365,8) + pl.date2num(dtm(self.yr, 1, 1))
+            dt = pl.num2date(jd8dvec[self.jd>=jd8dvec].max())
+            datestr = dt.strftime("%Y%m%d")
+        elif "m" in raw_timetype.lower():
+            timetype = "monthly"
+            ttype = "1M_MONTHLY"
+            datestr = f"{self.yr}{self.mn:02}"
+        else:
+            timetype = "daily"
+            ttype = "1D_DAILY"
+            datestr = f"{self.yr}{self.mn:02}{self.dy:02}"
+        return {"timetype":timetype, "ttype":ttype, "datestr":datestr}
+
     def download(self, fldname='chl', timetype="8D", **kwargs):
         """Download a missing file from the DAAC"""
         self._timeparams(**kwargs)
@@ -55,12 +78,12 @@ class Base(nasa.Base):
         self.vprint( "filename: %s" % os.path.basename(self.filename))
         if not self.isncfile(self.filename):
             self.download(fldname=fldname, timetype=timetype)
-        nc = netCDF4.Dataset(self.filename)        
-        raw = nc.variables[
-            self.vc[fldname][0]][(slice(0,1),) + self.ijslice]
-        field = raw.data
-        field[raw.mask] = np.nan  
-        setattr(self, fldname, np.squeeze(field))
+        with netCDF4.Dataset(self.filename) as nc:
+            raw = nc.variables[
+                self.vc[fldname][0]][(slice(0,1),) + self.ijslice]
+            field = raw.data
+            field[raw.mask] = np.nan  
+            setattr(self, fldname, np.squeeze(field))
 
     @property
     def vc(self):
@@ -77,30 +100,7 @@ class OceanColor(Base):
     def __init__(self, res="4km", **kwargs):
         super().__init__(**kwargs)
         self.timetypelist = ["5day", "8day", "daily", "monthly"]
-        
-    def _get_timetype_dict(self, raw_timetype):
-        if "5" in raw_timetype:
-            timetype = "5day"
-            ttype = "5D_DAILY"
-            jd5dvec = np.arange(0,365,5) + pl.date2num(dtm(self.yr, 1, 1))
-            dt = pl.num2date(jd5dvec[self.jd>=jd5dvec].max())
-            datestr = dt.strftime("%Y%m%d")
-        elif "8" in raw_timetype:
-            timetype = "8day"
-            ttype = "8D_DAILY"
-            jd8dvec = np.arange(0,365,8) + pl.date2num(dtm(self.yr, 1, 1))
-            dt = pl.num2date(jd8dvec[self.jd>=jd8dvec].max())
-            datestr = dt.strftime("%Y%m%d")
-        elif "m" in raw_timetype.lower():
-            timetype = "monthly"
-            ttype = "1M_MONTHLY"
-            datestr = f"{self.yr}{self.mn:02}"
-        else:
-            timetype = "daily"
-            ttype = "1D_DAILY"
-            datestr = f"{self.yr}{self.mn:02}{self.dy:02}"
-        return {"timetype":timetype, "ttype":ttype, "datestr":datestr}
-        
+
     def download(self, fldname='chl', timetype="8D", **kwargs):
         """Download a missing file from the DAAC"""
         self._timeparams(**kwargs)
@@ -120,52 +120,31 @@ class OceanColor(Base):
         tdict = self._get_timetype_dict(timetype)
         return(self.filestamp % (self.fp.upper(), self.vc[fldname][0].upper(),
                                  tdict["ttype"], self.res, tdict["datestr"],
-                                 self.dataversion))
+                                 self.data_version))
 
 class LocalPML(Base):
-    def __init__(self, res="4km", **kwargs):
+    def __init__(self, res="4km", ver=4.0, **kwargs):
+        self.data_version = f"{ver:.1f}" if type(ver) is not str else ver
         super().__init__(**kwargs)
-        
-    def _get_timetype_dict(self, raw_timetype):
-        if "5" in raw_timetype:
-            timetype = "5day"
-            ttype = "5D_DAILY"
-            jd5dvec = np.arange(0,365,5) + pl.date2num(dtm(self.yr, 1, 1))
-            dt = pl.num2date(jd5dvec[self.jd>=jd5dvec].max())
-            datestr = dt.strftime("%Y%m%d")
-        elif "8" in raw_timetype:
-            timetype = "8day"
-            ttype = "8D_DAILY"
-            jd8dvec = np.arange(0,365,8) + pl.date2num(dtm(self.yr, 1, 1))
-            dt = pl.num2date(jd8dvec[self.jd>=jd8dvec].max())
-            datestr = dt.strftime("%Y%m%d")
-        elif "m" in raw_timetype.lower():
-            timetype = "monthly"
-            ttype = "1M_MONTHLY"
-            datestr = f"{self.yr}{self.mn:02}"
-        else:
-            timetype = "daily"
-            ttype = "1D_DAILY"
-            datestr = f"{self.yr}{self.mn:02}{self.dy:02}"
-        return {"timetype":timetype, "ttype":ttype, "datestr":datestr}
-
+        self.global_dir = self.global_dir.replace("3.1", self.data_version)
+    
     def generate_filename(self, fldname='chl', timetype="8D", **kwargs):
         """Generate filename"""
         if ("m" in timetype.lower()) & ("c" in timetype.lower()):
             return ("ESACCI-OC-MAPPED-CLIMATOLOGY-1M_MONTHLY_4km_" +
-                    "PML_OCx_QAA-%02i-fv3.1.nc" % self.mn)
+                    f"PML_OCx_QAA-{self.mn:02}-fv{self.data_version}.nc")
         else:
             self._timeparams(**kwargs)
             ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                      pl.date2num(dtm(self.yr,  1,  1))) + 1
-            self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_OCx-%s-%s.nc"
+            self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_OCx-%s-fv%s.nc"
             tdict = self._get_timetype_dict(timetype)
             return(self.filestamp % (self.fp.upper(),
                                      self.vc[fldname][0].upper(),
                                      tdict["ttype"],
                                      self.res,
                                      tdict["datestr"],
-                                     self.dataversion))
+                                     self.data_version))
 
     
     def download(self, fldname='chl', timetype="8D", **kwargs):
@@ -220,12 +199,12 @@ class LocalPMLSST(base.Grid):
         self.vprint( "load jd=%f" % self.jd)
         self.filename = os.path.join(self.generate_filename(self.jd))
         self.vprint( "Filename is %s" % (self.filename))
-        nc = netCDF4.Dataset(self.filename)
-        raw = nc.variables["analysed_sst"][:]
-        fld = raw.data
-        fld[raw.mask] = np.nan
-        #fld = np.roll(np.squeeze(fld), 720)
-        self.sst = np.squeeze(fld)[self.j1:self.j2, self.i1:self.i2]
+        with netCDF4.Dataset(self.filename) as nc:
+            raw = nc.variables["analysed_sst"][:]
+            fld = raw.data
+            fld[raw.mask] = np.nan
+            #fld = np.roll(np.squeeze(fld), 720)
+            self.sst = np.squeeze(fld)[self.j1:self.j2, self.i1:self.i2]
         return None
 
     @property
