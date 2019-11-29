@@ -210,16 +210,16 @@ class Base(base.Grid):
     def _l3read_nc4(self, fld, nan=np.nan):
         self.vprint( "Reading netCDF4 file")
         self.vprint(self.filename)
-        nc = Dataset(self.filename)
-        nc.set_auto_mask(True)
-        nc.set_auto_scale(True)
+        with Dataset(self.filename) as nc:
+            nc.set_auto_mask(True)
+            nc.set_auto_scale(True)
         
-        var = nc.variables[list(nc.variables.keys())[0]]
-        raw = var[self.ijslice]
-        if not hasattr(raw, "mask"):
-            return self.llon * np.nan
-        field = raw.data
-        field[raw.mask] = np.nan  
+            var = nc.variables[list(nc.variables.keys())[0]]
+            raw = var[self.ijslice]
+            if not hasattr(raw, "mask"):
+                return self.llon * np.nan
+            field = raw.data
+            field[raw.mask] = np.nan  
             
         #start_jd    = pl.datestr2num(nc.time_coverage_start)
         #end_jd      = pl.datestr2num(nc.time_coverage_end)
