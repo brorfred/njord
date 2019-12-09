@@ -511,10 +511,14 @@ class Grid(object):
             raise ValueError("jd2 too large")
         return tvec[(tvec >= jd1) & (tvec <= jd2)]
         
-    def timeseries(self, fieldname, jd1, jd2, mask=None, **loadkwargs):
+    def timeseries(self, fieldname, jd1=None, jd2=None, dtmvec=None, 
+                   mask=None, **loadkwargs):
         """Create a timeseries of fields using mask to select data"""
         mask = mask if mask is not None else self.llat == self.llat
-        self.tvec = self.get_tvec(jd1, jd2)
+        if dtmvec is not None:
+            self.tvec = pl.datestr2num(dtmvec.astype(str))
+        else:
+            self.tvec = self.get_tvec(jd1, jd2)
         field = np.zeros((len(self.tvec),) + self.llat.shape, dtype=np.float32)
         for n,jd in enumerate(self.tvec):
             print(pl.num2date(jd), len(self.tvec) - n)
