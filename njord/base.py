@@ -318,9 +318,9 @@ class Grid(object):
         else:
             return ivec,jvec
 
-    def fld2vec(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
+    def match(self, fldname, lonvec, latvec, jdvec, maskvec=None, djd=1,
                 daysback=1, nei=1,all_nei=True):
-        """Get data from the lat-lon-jd positions """
+        """Match observations with datafield using lat-lon-time positions """
         if maskvec is not None:
             lonvec = lonvec[maskvec]
             latvec = latvec[maskvec]
