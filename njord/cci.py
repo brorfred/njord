@@ -97,7 +97,8 @@ class Base(nasa.Base):
 
 
 class OceanColor(Base):
-    def __init__(self, res="4km", **kwargs):
+    def __init__(self, res="4km", ver = "3.1", **kwargs):
+        self.data_version = f"{ver:.1f}" if type(ver) is not str else ver
         super().__init__(**kwargs)
         self.timetypelist = ["5day", "8day", "daily", "monthly"]
 
@@ -116,7 +117,7 @@ class OceanColor(Base):
         self._timeparams(**kwargs)
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                  pl.date2num(dtm(self.yr,  1,  1))) + 1
-        self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_OCx-%s-%s.nc"
+        self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_OCx-%s-fv%s.nc"
         tdict = self._get_timetype_dict(timetype)
         return(self.filestamp % (self.fp.upper(), self.vc[fldname][0].upper(),
                                  tdict["ttype"], self.res, tdict["datestr"],
