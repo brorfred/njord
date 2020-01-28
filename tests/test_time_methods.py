@@ -15,13 +15,13 @@ def test_yearday():
     assert ns.yr == 1980
     assert ns.yd == 1
 
-    assert (2003,1, 5) == yrday.date(yrday.jd(2003,1, 5))
-    assert (2002,1, 5) == yrday.date(yrday.jd(2002,1, 5))
-    assert (2004,2,28) == yrday.date(yrday.jd(2004,2,28))
-    assert (2004,2,29) == yrday.date(yrday.jd(2004,2,29))
-    assert (2004,3, 1) == yrday.date(yrday.jd(2004,3, 1))
-    assert (2005,2,28) == yrday.date(yrday.jd(2005,2,28))
-    assert (2005,3, 1) == yrday.date(yrday.jd(2005,3, 1))
+    assert (2003,1, 5, 0) == yrday.date(yrday.jd(2003,1, 5))
+    assert (2002,1, 5, 0) == yrday.date(yrday.jd(2002,1, 5))
+    assert (2004,2,28, 0) == yrday.date(yrday.jd(2004,2,28))
+    assert (2004,2,29, 0) == yrday.date(yrday.jd(2004,2,29))
+    assert (2004,3, 1, 0) == yrday.date(yrday.jd(2004,3, 1))
+    assert (2005,2,28, 0) == yrday.date(yrday.jd(2005,2,28))
+    assert (2005,3, 1, 0) == yrday.date(yrday.jd(2005,3, 1))
     assert (2018, 12, 15, 0.5) == yrday.date(yrday.jd(2018,12,15)+0.5)
 
 def test_datestr():
