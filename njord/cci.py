@@ -68,7 +68,7 @@ class Base(nasa.Base):
         url = f"{self.dataurl}/{tdict['timetype']}/{longfld}/{self.yr}/"
         self.retrive_file(url, local_filename=filename)
         
-    def load(self, fldname="chl", timetype="8day", **kwargs):
+    def load(self, fldname="chl", timetype="daily", **kwargs):
         """Load the satellite field associated with a given time."""
         self._timeparams(**kwargs)
         self.vprint( "load jd=%f and field=%s" % (self.jd, fldname))
@@ -124,7 +124,7 @@ class OceanColor(Base):
                                  self.data_version))
 
 class LocalPML(Base):
-    def __init__(self, res="4km", ver=4.0, **kwargs):
+    def __init__(self, res="4km", ver=3.1, **kwargs):
         self.data_version = f"{ver:.1f}" if type(ver) is not str else ver
         super().__init__(**kwargs)
         self.global_dir = self.global_dir.replace("3.1", self.data_version)
@@ -134,6 +134,10 @@ class LocalPML(Base):
         if ("m" in timetype.lower()) & ("c" in timetype.lower()):
             return ("ESACCI-OC-MAPPED-CLIMATOLOGY-1M_MONTHLY_4km_" +
                     f"PML_OCx_QAA-{self.mn:02}-fv{self.data_version}.nc")
+        elif "month" in timetype.lower():
+            return ("ESACCI-OC-L3S-CHLOR_A-MERGED-1M_MONTHLY_4km_" +
+                   f"GEO_PML_OCx-{self.yr}{self.mn:02}-" +
+                   f"fv{self.data_version}.nc")
         else:
             self._timeparams(**kwargs)
             ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
@@ -158,10 +162,12 @@ class LocalPML(Base):
             tdict = self._get_timetype_dict(timetype)
             globaldir = os.path.join(self.global_dir, tdict['timetype'],
                                      longfld, str(self.yr))
+            globaldir = globaldir.replace("v3.1",f"v{self.data_version}")
         filename = self.generate_filename(fldname, timetype)
         globalfile = os.path.join(globaldir, filename)
         os.symlink(globalfile, os.path.join(self.datadir, filename))
         
+        #/data/datasets/CCI/v3.1-release/geographic/netcdf/monthly/chlor_a 
 
 
 class LocalPMLSST(base.Grid):

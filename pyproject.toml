@@ -17,6 +17,7 @@ six = "^1.13"
 bs4 = "^0.0.1"
 netcdf4 = "^1.5"
 pydap = "^3.2"
+requests = "^2.22"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.9"
