@@ -84,6 +84,7 @@ class Grid(object):
                              writeback=True)
         except:
             pass
+        self.download_timeout = 2
 
         self.setup_grid()
         if hasattr(self, "imt"):
@@ -458,7 +459,8 @@ class Grid(object):
         else:
             print("downloading\n %s \nto\n %s" % (url, local_filename))
             try:
-                r = requests.get(url, params=params, stream=True, timeout=2)
+                r = requests.get(url, params=params, stream=True, 
+                                 timeout=self.download_timeout)
             except requests.ReadTimeout:
                 warnings.warn("Connection to server timed out.")
                 return False
