@@ -63,7 +63,7 @@ class Base(nasa.Base):
         self._timeparams(**kwargs)
         filename = os.path.join(
             self.datadir, self.generate_filename(fldname, timetype))
-        longfld = self.vc[fldname][0]
+        longfld = self.vc[fldname][1]
         tdict = self._get_timetype_dict(timetype)
         url = f"{self.dataurl}/{tdict['timetype']}/{longfld}/{self.yr}/"
         self.retrive_file(url, local_filename=filename)
@@ -88,12 +88,17 @@ class Base(nasa.Base):
     @property
     def vc(self):
         """Add a dict with filename variable components"""
-        return    {#'k49': ['KD490_Kd_490',  'km', 0,      100  ],
-                   'chl':  ['chlor_a',       'km', 0.001,  200  ],
-                   #'ipar': ['FLH_ipar',     'km', 0,    10000  ],
-                   #'eup': ['ZLEE_Zeu_lee',  'km', 0,    10000  ],
-                   #'pic': ['PIC_pic',       'km', 0,        0.1],
-                   }
+        return {'chl':    ['chlor_a', 'chlor_a', 'OCx'],
+                'rrs412': ['Rrs_412', 'rrs', 'OCx'],
+                'rrs443': ['Rrs_443', 'rrs', 'OCx'],
+                'rrs490': ['Rrs_490', 'rrs', 'OCx'],
+                'rrs510': ['Rrs_510', 'rrs', 'OCx'],
+                'rrs555': ['Rrs_555', 'rrs', 'OCx'],
+                'rrs670': ['Rrs_670', 'rrs', 'OCx'],
+                #'ipar': ['FLH_ipar',     'km'],
+                #'eup': ['ZLEE_Zeu_lee',  'km'],
+                #'pic': ['PIC_pic',       'km'],
+                }
 
 
 class OceanColor(Base):
@@ -107,7 +112,7 @@ class OceanColor(Base):
         self._timeparams(**kwargs)
         filename = os.path.join(
             self.datadir, self.generate_filename(fldname, timetype))
-        longfld = self.vc[fldname][0]
+        longfld = self.vc[fldname][1]
         tdict = self._get_timetype_dict(timetype)
         url = f"{self.dataurl}/{tdict['timetype']}/{longfld}/{self.yr}/"
         self.retrive_file(url, local_filename=filename)
@@ -117,11 +122,12 @@ class OceanColor(Base):
         self._timeparams(**kwargs)
         ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
                  pl.date2num(dtm(self.yr,  1,  1))) + 1
-        self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_OCx-%s-fv%s.nc"
+        self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_%s-%s-%s.nc"
         tdict = self._get_timetype_dict(timetype)
-        return(self.filestamp % (self.fp.upper(), self.vc[fldname][0].upper(),
-                                 tdict["ttype"], self.res, tdict["datestr"],
-                                 self.data_version))
+        return(self.filestamp % (self.fp.upper(), self.vc[fldname][1].upper(),
+                                 tdict["ttype"], self.res, 
+                                 self.vc[fldname][2], tdict["datestr"],
+                                 self._data_version))
 
 class LocalPML(Base):
     def __init__(self, res="4km", ver=3.1, **kwargs):
@@ -140,14 +146,13 @@ class LocalPML(Base):
                    f"fv{self.data_version}.nc")
         else:
             self._timeparams(**kwargs)
-            ydmax = (pl.date2num(dtm(self.yr, 12, 31)) -
-                     pl.date2num(dtm(self.yr,  1,  1))) + 1
-            self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_OCx-%s-fv%s.nc"
+            self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_%s-%s-fv%s.nc"
             tdict = self._get_timetype_dict(timetype)
             return(self.filestamp % (self.fp.upper(),
-                                     self.vc[fldname][0].upper(),
+                                     self.vc[fldname][1].upper(),
                                      tdict["ttype"],
                                      self.res,
+                                     self.vc[fldname][2],
                                      tdict["datestr"],
                                      self.data_version))
 
@@ -158,7 +163,7 @@ class LocalPML(Base):
         if ("m" in timetype.lower()) & ("c" in timetype.lower()):
             globaldir = self.mc_datadir
         else:
-            longfld = self.vc[fldname][0]
+            longfld = self.vc[fldname][1]
             tdict = self._get_timetype_dict(timetype)
             globaldir = os.path.join(self.global_dir, tdict['timetype'],
                                      longfld, str(self.yr))
