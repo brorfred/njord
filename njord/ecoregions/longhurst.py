@@ -30,6 +30,8 @@ class Longhurst(base.Grid):
         self.orig  = ogr.Open(self.filename)
         self.layer = self.orig.GetLayer(0)
         self.layername = self.layer.GetName()
+        layer_defn = self.layer.GetLayerDefn()
+        print(self.filename)
         self.attrfield = (self.fieldnames[0]
                           if attrfield is None else attrfield)
                 
@@ -46,9 +48,10 @@ class Longhurst(base.Grid):
 
     def download(self):
         """Download the file"""
-        filename = os.path.basename(self.filename)
-        url = f"{self.dataurl}{filename}"
-        self.retrive_file(url, local_filename=self.filename)
+        for ext in ["shp", "dbf"]:
+            filename = os.path.basename(self.filename)
+            url = f"{self.dataurl}{filename}".replace("shp", ext)
+            self.retrive_file(url, local_filename=self.filename.replace("shp", ext))
         
     def load(self):
         """Load Biome array"""

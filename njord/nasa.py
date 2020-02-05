@@ -90,7 +90,7 @@ class Base(base.Grid):
         url = "https://%s/%s" % (self.gsfc_host, path)
         datelist = []
         bs = BeautifulSoup(
-            requests.get(url, timeout=1).content, "html.parser")
+            requests.get(url, timeout=self.download_timeout).content, "html.parser")
         for td in bs.find_all("td"):
             if td.a is not None:
                 datelist.append(

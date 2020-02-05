@@ -84,7 +84,7 @@ class Grid(object):
                              writeback=True)
         except:
             pass
-        self.download_timeout = 2
+        self.download_timeout = 20
 
         self.setup_grid()
         if hasattr(self, "imt"):
