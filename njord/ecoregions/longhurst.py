@@ -53,8 +53,10 @@ class Longhurst(base.Grid):
             url = f"{self.dataurl}{filename}".replace("shp", ext)
             self.retrive_file(url, local_filename=self.filename.replace("shp", ext))
         
-    def load(self):
+    def load(self, fldname="regions", jd=None):
         """Load Biome array"""
+        if hasattr(self, "patch_array"):
+            return None
         self._create_mem_layer()
         self.add_numerical_attribute_fields()
         self.create_raster()
@@ -65,8 +67,8 @@ class Longhurst(base.Grid):
             raise Exception("error rasterizing layer: %s" % err)
         arr = self.raster.GetRasterBand(1).ReadAsArray()
         arr[arr == 0] = -998
-        self.array = arr - 1
-        self._regions =  self.array[::-1,:]
+        self.patch_array = arr - 1
+        self._regions =  self.patch_array[::-1,:]
 
     @property
     def regions(self):

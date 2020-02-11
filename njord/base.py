@@ -404,7 +404,7 @@ class Grid(object):
 
     def get_field(self, field,  **kwargs):
         self.load(field, **kwargs)
-        return self.__dict__[field]
+        return getattr(self, field)
 
     def isncfile(self, filename):
         if not os.path.isfile(filename):
