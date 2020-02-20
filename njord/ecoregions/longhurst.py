@@ -53,7 +53,7 @@ class Longhurst(base.Grid):
             url = f"{self.dataurl}{filename}".replace("shp", ext)
             self.retrive_file(url, local_filename=self.filename.replace("shp", ext))
         
-    def load(self, fldname="regions", jd=None):
+    def load(self, fldname="regions", *args, **kwargs):
         """Load Biome array"""
         if hasattr(self, "patch_array"):
             return None

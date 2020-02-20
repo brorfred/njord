@@ -387,7 +387,7 @@ class Grid(object):
         """Remove checkerboarding by smearing the field"""
         if not fieldname: 
             fieldname = self.last_loaded_feld
-        fld = self.__dict__[fieldname]
+        fld = getattr(self, fieldname)
         fldi = (fld[:,:-1,:] + fld[:,1:,:]) / 2
         fldj = (fld[:,:,:-1] + fld[:,:,1:]) / 2
         flint = (fld[:,-1,:] + fld[:,-2,:]) / 2
@@ -551,7 +551,7 @@ class Grid(object):
         for n_t,jd in enumerate(tvec):
             print(pl.num2date(jd))
             self.load(fieldname, jd=jd)
-            field = self.__dict__[fieldname]
+            field = getattr(self, fieldname)
             field[~mask] = np.nan
             hsmat[n_t,:],_ = np.histogram(field[~np.isnan(field)], vlist)
         class hiS: pass
@@ -559,7 +559,7 @@ class Grid(object):
         hiS.vlist = vlist
         hiS.hist = hsmat
         hiS.norm = (hsmat.astype(float) / hsmat.max(axis=0))
-        self.__dict__[fieldname + "_hiS"] = hiS
+        setattr(self, fieldname + "_hiS", hiS)
         
     def dump(self, filename=None):
         """Dump all attributes in instance to a file"""
@@ -623,7 +623,7 @@ class Grid(object):
         if not hasattr(self, 'mp'): self.add_mp()
         miv = np.ma.masked_invalid
         if type(fld) == str:
-            field = self.__dict__[fld]
+            field = getattr(self, fld)
         else:
             field = fld
         x,y = self.mp(self.llon, self.llat)
