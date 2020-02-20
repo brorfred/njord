@@ -8,6 +8,7 @@ import ftplib
 from urllib.parse import urlsplit
 import shelve
 import pathlib
+import numbers
 
 import numpy as np
 from scipy.spatial import cKDTree
@@ -514,22 +515,27 @@ class Grid(object):
         return tvec[(tvec >= jd1) & (tvec <= jd2)]
         
     def timeseries(self, fieldname, jd1=None, jd2=None, dtmvec=None, 
-                   mask=None, **loadkwargs):
+                   mask=None, dtype=np.float32, **loadkwargs):
         """Create a timeseries of fields using mask to select data"""
         mask = mask if mask is not None else self.llat == self.llat
         if dtmvec is not None:
             self.tvec = pl.datestr2num(dtmvec.astype(str))
         else:
             self.tvec = self.get_tvec(jd1, jd2)
-        field = np.zeros((len(self.tvec),) + self.llat.shape, dtype=np.float32)
+        if issubclass(dtype, numbers.Integral):
+            nan = 0
+        else:
+            nan = np.nan
+        field = np.zeros((len(self.tvec),) + self.llat.shape, dtype=dtype)
         for n,jd in enumerate(self.tvec):
             print(pl.num2date(jd), len(self.tvec) - n)
             try:
-                field[n,:,:] = self.get_field(
-                    fieldname, jd=jd, **loadkwargs).astype(np.float32)
+                fld = self.get_field(fieldname, jd=jd, **loadkwargs)
+                fld[np.isnan(fld)] = nan
+                field[n,:,:] = fld.astype(dtype)
             except (KeyError, IOError):
-                field[n,:,:] = np.nan
-            field[n, ~mask] = np.nan
+                field[n,:,:] = nan
+            field[n, ~mask] = nan
         setattr(self, fieldname + 't', field)
 
     def histmoller(self, fieldname, jd1, jd2, y1, y2,

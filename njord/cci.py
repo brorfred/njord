@@ -88,7 +88,11 @@ class Base(nasa.Base):
     @property
     def vc(self):
         """Add a dict with filename variable components"""
-        return {'chl':    ['chlor_a', 'chlor_a', 'OCx'],
+        return {'chl':         ['chlor_a',     'chlor_a', 'OCx'],
+                'MODISA_nobs': ['MODISA_nobs', 'chlor_a', 'OCx'],
+                'MERIS_nobs':  ['MERIS_nobs',  'chlor_a', 'OCx'],
+                'SeaWiFS_nobs':['SeaWiFS_nobs','chlor_a', 'OCx'],
+                'VIIRS_nobs':  ['VIIRS_nobs',  'chlor_a', 'OCx'],
                 'rrs412': ['Rrs_412', 'rrs', 'OCx'],
                 'rrs443': ['Rrs_443', 'rrs', 'OCx'],
                 'rrs490': ['Rrs_490', 'rrs', 'OCx'],
