@@ -8,10 +8,12 @@ import pandas as pd
 from scipy.spatial import cKDTree
 
 import numpy as np
-from osgeo import gdal, ogr    
+from osgeo import gdal, ogr
+import xarray as xr
 
 from njord import base
 
+DATADIR = os.path.dirname(__file__)
 
 class Longhurst(base.Grid):
     """Retrieve and load ecoregion definitions based on Longhurst
@@ -23,28 +25,32 @@ class Longhurst(base.Grid):
     http://oceandata.azti.es:8080
     /thredds/fileServer/MESMA/Longhurst_world_v4_2010.shp
     """
-    def __init__(self, Dlatlon=0.1, filename=None, attrfield=None):
+    def __init__(self, Dlatlon=0.1, grid=None, filename=None, attrfield=None):
         self.Dlatlon = Dlatlon
+        self._griddef = grid
+        self.filename = filename
         super().__init__()
         os.environ["SHAPE_RESTORE_SHX"] = "YES"
         self.orig  = ogr.Open(self.filename)
         self.layer = self.orig.GetLayer(0)
         self.layername = self.layer.GetName()
         layer_defn = self.layer.GetLayerDefn()
-        print(self.filename)
         self.attrfield = (self.fieldnames[0]
                           if attrfield is None else attrfield)
                 
     def setup_grid(self):
         if not os.path.isfile(self.filename):
             self.download()
+        if self._griddef == "4km":
+            self.Dlatlon = 360/8640
+            self._region_file = os.path.join(DATADIR, "data", "ecoregions_sat4km.nc")
+        #else:
         self.latvec = np.arange( -90, 90, self.Dlatlon)
         self.lonvec = np.arange(-180,180, self.Dlatlon)
         self.llon,self.llat = np.meshgrid(self.lonvec,self.latvec)
         self.jmt,self.imt = self.llon.shape
         (self.xmin, self.xmax) = (self.lonvec.min(), self.lonvec.max())
         (self.ymin, self.ymax) = (self.latvec.min(), self.latvec.max())
-
 
     def download(self):
         """Download the file"""
@@ -57,18 +63,22 @@ class Longhurst(base.Grid):
         """Load Biome array"""
         if hasattr(self, "patch_array"):
             return None
-        self._create_mem_layer()
-        self.add_numerical_attribute_fields()
-        self.create_raster()
-        err = gdal.RasterizeLayer(
-            self.raster, [1], self.source_layer,
-            options=["ATTRIBUTE=%s" % self.attrfield])
-        if err != 0:
-            raise Exception("error rasterizing layer: %s" % err)
-        arr = self.raster.GetRasterBand(1).ReadAsArray()
-        arr[arr == 0] = -998
-        self.patch_array = arr - 1
-        self._regions =  self.patch_array[::-1,:]
+        elif hasattr(self, "_region_file"):
+            ds = xr.open_dataset(self._region_file)
+            setattr(self, "_regions", ds.longhurst.data)
+        else:
+            self._create_mem_layer()
+            self.add_numerical_attribute_fields()
+            self.create_raster()
+            err = gdal.RasterizeLayer(
+                self.raster, [1], self.source_layer,
+                options=["ATTRIBUTE=%s" % self.attrfield])
+            if err != 0:
+                raise Exception("error rasterizing layer: %s" % err)
+            arr = self.raster.GetRasterBand(1).ReadAsArray()
+            arr[arr == 0] = -998
+            self.patch_array = arr - 1
+            self._regions =  self.patch_array[::-1,:]
 
     @property
     def regions(self):

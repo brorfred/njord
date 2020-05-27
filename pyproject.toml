@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "njord"
-version = "0.7.0"
+version = "0.7.1"
 description = "Retrieve and manipulate gridded geophysical fields"
 authors = ["Bror Jonsson <brorfred@gmail.com>"]
 license = "MIT"
