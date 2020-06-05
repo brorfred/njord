@@ -3,7 +3,7 @@ from . import ogr2array
 
 from .fay_mckinley import FayMcKinley
 
-from .longhurst import Longhurst
+from .longhurst_geopandas import Longhurst
 
 
 """

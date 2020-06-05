@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "njord"
-version = "0.7.2"
+version = "0.7.5"
 description = "Retrieve and manipulate gridded geophysical fields"
 authors = ["Bror Jonsson <brorfred@gmail.com>"]
 license = "MIT"
+include = ["ecoregions/data/Longhurst_world_v4_2010.shp"]
 
 [tool.poetry.dependencies]
 python = "^3.7"
@@ -18,6 +19,9 @@ bs4 = "^0.0.1"
 netcdf4 = "^1.5"
 pydap = "^3.2"
 requests = "^2.22"
+geopandas = "^0.7.0"
+psycopg2-binary = "^2.8.5"
+geocube = "^0.0.12"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.9"
