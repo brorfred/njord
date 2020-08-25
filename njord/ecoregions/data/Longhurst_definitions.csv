@@ -1,0 +1,59 @@
+﻿ID,Basin,Biome,Province,Code
+0,Land,Land,Land,LAND
+1,Arctic,Polar,Boreal Polar Province,BPRL
+2,Atlantic,Polar,Atlantic Arctic Province,ARCT
+3,Atlantic,Polar,Atlantic Subarctic Province,SARC
+4,Atlantic,Westerlies,N. Atlantic Drift Province,NADR
+5,Atlantic,Westerlies,Gulf Stream Province,GFST
+6,Atlantic,Westerlies,N. Atlantic Subtropical Gyre Province (West),NAST W
+7,Atlantic,Trades,N. Atlantic Tropical Gyre Province,NATR
+8,Atlantic,Trades,Western Tropical Atlantic Province,WTRA
+9,Atlantic,Trades,Eastern Tropical Atlantic Province,ETRA
+10,Atlantic,Trades,South Atlantic Gyre Province,SATL
+11,Atlantic,Coastal,NE Atlantic Shelves Province,NECS
+12,Atlantic,Coastal,Canary Coastal Province,CNRY
+13,Atlantic,Coastal,Guinea Current Coastal Province,GUIN
+14,Atlantic,Coastal,Guianas Coastal Province,GUIA
+15,Atlantic,Coastal,NW Atlantic Shelves Province,NWCS
+16,Atlantic,Westerlies,Mediterranean Sea,MEDI
+17,Atlantic,Trades,Caribbean Province ,CARB
+18,Atlantic,Westerlies,N. Atlantic Subtropical Gyre Province (East),NAST E
+19,Atlantic,Coastal,Cheasapeake Bay Province,CHSB
+20,Atlantic,Coastal,Brazil Current Coastal Province,BRAZ
+21,Atlantic,Coastal,SW Atlantic Shelves Province,FKLD
+22,Atlantic,Coastal,Benguela Current Coastal Province,BENG
+23,Indian,Trades,Indian Monsoon Gyres Province,MONS
+24,Indian,Trades,Indian S. Subtropical Gyre Province,ISSG
+25,Indian,Coastal,E. Africa Coastal Province,EAFR
+26,Indian,Coastal,"Red Sea, Persian Gulf Province",REDS
+27,Indian,Coastal,NW Arabian Upwelling Province,ARAB
+28,Indian,Coastal,E. India Coastal Province,INDE
+29,Indian,Coastal,W. India Coastal Province,INDW
+30,Indian,Coastal,Australia-Indonesia Coastal Province,AUSW
+31,Pacific,Polar,N. Pacific Epicontinental Province,BERS
+32,Pacific,Westerlies,Pacific Subarctic Gyres Province (East),PSAE
+33,Pacific,Westerlies,Pacific Subarctic Gyres Province (West),PSAW
+34,Pacific,Westerlies,Kuroshio Current Province,KURO
+35,Pacific,Westerlies,N. Pacific Polar Front Province,NPPF
+36,Pacific,Westerlies,N. Pacific Subtropical Gyre Province (East),NPSE
+37,Pacific,Westerlies,N. Pacific Subtropical Gyre Province (West),NPSW
+38,Pacific,Westerlies,Offshore California Current Province,OCAL
+39,Pacific,Westerlies,Tasman Sea Province,TASM
+40,Pacific,Trades,South Pacific Gyre Province,SPSG
+41,Pacific,Trades,N. Pacific Tropical Gyre Province,NPTG
+42,Pacific,Trades,N. Pacific Equatorial Countercurrent Province,PNEC
+43,Pacific,Trades,Pacific Equatorial Divergence Province,PEQD
+44,Pacific,Trades,W. Pacific Warm Pool Province,WARM
+45,Pacific,Trades,Archipelagic Deep Basins Province,ARCH
+46,Pacific,Coastal,Alaska Downwelling Coastal Province,ALSK
+47,Pacific,Coastal,California Upwelling Coastal Province,CCAL
+48,Pacific,Coastal,Central American Coastal Province,CAMR
+49,Pacific,Coastal,Chile-Peru Current Coastal Province,HUMB
+50,Pacific,Coastal,China Sea Coastal Province,CHIN
+51,Pacific,Coastal,Sunda-Arafura Shelves Province,SUND
+52,Pacific,Coastal,East Australian Coastal Province,AUSE
+53,Pacific,Coastal,New Zealand Coastal Province,NEWZ
+54,Southern,Westerlies,S. Subtropical Convergence Province,SSTC
+55,Southern,Westerlies,Subantarctic Province ,SANT
+56,Southern,Polar,Antarctic Province ,ANTA
+57,Southern,Polar,Austral Polar Province,APLR

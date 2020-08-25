@@ -8,12 +8,12 @@ import pandas as pd
 from scipy.spatial import cKDTree
 
 import numpy as np
-from osgeo import gdal, ogr
+#from osgeo import gdal, ogr
 import xarray as xr
 
 from njord import base
 
-DATADIR = os.path.dirname(__file__)
+DATADIR = os.path.dirname(__file__) + "/data"
 
 class Longhurst(base.Grid):
     """Retrieve and load ecoregion definitions based on Longhurst
@@ -37,6 +37,7 @@ class Longhurst(base.Grid):
         layer_defn = self.layer.GetLayerDefn()
         self.attrfield = (self.fieldnames[0]
                           if attrfield is None else attrfield)
+        
                 
     def setup_grid(self):
         if not os.path.isfile(self.filename):
@@ -115,18 +116,8 @@ class Longhurst(base.Grid):
 
     @property
     def fieldnames(self):
-        layer_defn = self.layer.GetLayerDefn()
-        return [layer_defn.GetFieldDefn(i).GetName()
-                for i in range(layer_defn.GetFieldCount())]
-
-    def get_fields(self):
-        [setattr(self,fn,[]) for fn in self.fieldnames]
-        self.layer.ResetReading()
-        for ff in self.layer:
-            for key in ff.keys():
-                getattr(self,key).append(ff[key])
-        return {key:getattr(self,key) for key in ff.keys()}
-        
+        return ["regions", "region_names", "region_codes"]
+    
     @property
     def region_names(self):
         """Get list of long names of all providences"""
@@ -137,3 +128,79 @@ class Longhurst(base.Grid):
         """Get list of large-scale sections of providences"""
         return [nm.split("-")[0].rstrip()
                     for nm in self.get_fields()["ProvDescr"]]
+
+
+class Longhurst2007(base.Grid):
+    """Retrieve and load ecoregion definitions based on Longhurst
+    
+    Description:
+    https://doi.org/10.1093/plankt/17.6.1245
+    """
+    def __init__(self, filename=None, datadir=None):
+        datadir = os.path.dirname(__file__)
+        self.filename = "Longhurst_Regions_2007.nc" if filename is None else filename
+        self.datadir = os.path.join(datadir, "data")
+        super().__init__()
+        self._longh_names = pd.read_csv(os.path.join(datadir, "data",
+            "Longhurst_definitions.csv"))
+
+    def setup_grid(self):
+        self.ds = xr.open_dataset(os.path.join(DATADIR, self.filename))
+        self.latvec = self.ds.lat.values[::-1]
+        self.lonvec = self.ds.lon.values
+        self.llon,self.llat = np.meshgrid(self.lonvec,self.latvec)
+        self.jmt,self.imt = self.llon.shape
+        (self.xmin, self.xmax) = (self.lonvec.min(), self.lonvec.max())
+        (self.ymin, self.ymax) = (self.latvec.min(), self.latvec.max())
+
+    def download(self):
+        """Download the file"""
+        for ext in ["shp", "dbf"]:
+            filename = os.path.basename(self.filename)
+            url = f"{self.dataurl}{filename}".replace("shp", ext)
+            self.retrive_file(url, local_filename=self.filename.replace("shp", ext))
+        
+    def load(self, fldname="regions", *args, **kwargs):
+        """Load Biome array"""
+        if hasattr(self, "patch_array"):
+            return None
+        elif hasattr(self, "_region_file"):
+            ds = xr.open_dataset(self._region_file)
+            setattr(self, "_regions", ds.longhurst.data)
+        else:
+            arr = self.ds.regs.values
+            arr[arr == 99] = 0
+            for enu,raw in enumerate(np.unique(arr)):
+                arr[arr==raw] = enu
+            self.patch_array = arr #- 1
+            self._regions =  self.patch_array[::-1,:]
+
+    @property
+    def regions(self):
+        if not hasattr(self, "_regions"):
+            self.load()
+        return self._regions
+
+    @property
+    def region_names(self):
+        """Get list of long names of all providences"""
+        return self._longh_names["Province"].values
+
+    @property
+    def region_codes(self):
+        """Get list of large-scale sections of providences"""
+        return self._longh_names["Code"].values
+
+    def choropleth(self, data, regid=None, projmap=True, **pcolorkw):
+        """Create choropleth map of the datavec based on Longhurst regions"""
+        chomat = lh.regions * np.nan
+        for rid in np.unique(lh.regions): 
+            try: 
+                chomat[lh.regions==rid] = dfregr.slope[rid] 
+            except KeyError: 
+                continue 
+        if projmap:
+            mp.pcolor(self.llon, self.llat, chomat, **pcolorkw)
+            mp.nice()
+        else:
+            pl.pcolormesh(self.llon, self.llat, chomat, **pcolorkw)

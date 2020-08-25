@@ -46,9 +46,12 @@ from __future__ import (absolute_import, division, print_function,
 
 
 import six
-from matplotlib.cbook import iterable, is_numlike, safe_first_element
+from matplotlib.cbook import iterable, safe_first_element
 import numpy as np
 
+def is_numlike(obj):
+    attrs = ['__add__', '__sub__', '__mul__', '__truediv__', '__pow__']
+    return all(hasattr(obj, attr) for attr in attrs)
 
 class AxisInfo(object):
     """

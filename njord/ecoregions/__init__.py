@@ -1,10 +1,9 @@
 
-from . import ogr2array
-
 from .fay_mckinley import FayMcKinley
 
-from .longhurst_geopandas import Longhurst
+#from .longhurst_geopandas import Longhurst
 
+from .longhurst import Longhurst2007 as Longhurst
 
 """
 def longhurst(Dlonlat=0.5, **kwargs):
