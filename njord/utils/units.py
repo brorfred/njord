@@ -43,15 +43,16 @@ datetime objects::
 """
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
-
+from collections.abc import Iterable
+from numbers import Number
 
 import six
-from matplotlib.cbook import iterable, safe_first_element
+from matplotlib.cbook import safe_first_element
 import numpy as np
 
-def is_numlike(obj):
-    attrs = ['__add__', '__sub__', '__mul__', '__truediv__', '__pow__']
-    return all(hasattr(obj, attr) for attr in attrs)
+def iterable(obj):
+    return isinstance(obj, Iterable)
+
 
 class AxisInfo(object):
     """
@@ -128,9 +129,9 @@ class ConversionInterface(object):
         """
         if iterable(x):
             for thisx in x:
-                return is_numlike(thisx)
+                return isinstance(thisx, Number)
         else:
-            return is_numlike(x)
+            return isinstance(x, Number)
 
 
 class Registry(dict):
