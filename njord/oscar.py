@@ -23,7 +23,7 @@ class Oscar(base.Grid):
         super(Oscar, self).__init__(**kwargs)
 
     def setup_grid(self):
-        print self.dataurl
+        print(self.dataurl)
         if not os.path.exists(self.gridfile):
             self.download(self.gridfile)
         gc = netcdf_file(self.gridfile)
@@ -46,7 +46,7 @@ class Oscar(base.Grid):
         nc1 = netcdf_file(filename)        
         tvec = nc1.variables['time'][:]
         t1 = int(np.nonzero((tvec<=md))[0].max())
-        print t1,max(tvec)
+        print(t1,max(tvec))
         if t1<(len(tvec)-1):
             nc2 = nc1
             t2 = t1 +1
@@ -63,12 +63,15 @@ class Oscar(base.Grid):
         rat = float(md-tvec[t1])/float(tvec[t2]-tvec[t1])
         self.u = u2*rat + u1*(1-rat)
         self.v = v2*rat + v1*(1-rat)
-        print self.jd,md,t1,t2
+        print(self.jd,md,t1,t2)
 
-    def download(self, filename):
+    def download(self, dtm):
         """Download a missing file from source website"""
-        print "Downloading file from server. This might take several minutes."
-        url = urljoin(self.dataurl, os.path.basename(filename))
+        print("Downloading file from server. This might take several minutes.")
+        remote_host = "podaac-opendap.jpl.nasa.gov"
+        remote_path = "/opendap/allData/oscar/preview/L4/oscar_third_deg"
+        filename = "oscar_vel{dtm.year}.nc.gz"
+        with xr.open_dataset("https://{remote_host}/{remote_path}/{filename}")            
         self.retrive_file(self.dataurl, filename + ".gz")
         err = sbp.call([ZIPCMD, "-d", filename + ".gz"])
 
@@ -141,7 +144,7 @@ class Oscar(base.Grid):
             u[n,:,:]    = (self.u).astype(np.float32)[i1:i2,j1:j2]
             v[n,:,:]    = (self.v).astype(np.float32)[i1:i2,j1:j2]
             fld1 = fld2
-            print t,n
+            print(t,n)
         nw.close()
 
     def chl_mc(self):
@@ -170,9 +173,8 @@ class Oscar(base.Grid):
         for n,t in enumerate(np.arange(1,13)):
             fld = self.loadL3(mc=t)[i1:i2,j1:j2]
             chl[n,:,:]  = (fld).astype(np.float32)
-            print t,n
+            print(t,n)
         nw.close()
-
 
     def uvmat(self):
         hsmat = np.zeros ([20]+list(self.llat.shape)).astype(np.int16)
@@ -181,42 +183,10 @@ class Oscar(base.Grid):
 
         vlist = np.linspace(0,1.5,21)
         for jd in np.arange(jd1,jd2+1):
-            print pl.num2date(jd)
+            print(pl.num2date(jd))
             self.load(jd=jd)
             uv = np.sqrt(self.u**2 + self.v**2)
             for n,(v1,v2) in enumerate(zip(vlist[:-1],vlist[1:])):
                 msk = (uv>=v1) & (uv<v2)
                 hsmat[n,msk] += 1
         return hsmat
-
-
-
-    def movie(self):
-        import matplotlib as mpl
-        mpl.rcParams['axes.labelcolor'] = 'white'
-        pl.close(1)
-        pl.figure(1,(8,4.5),facecolor='k')
-        miv = np.ma.masked_invalid
-        figpref.current()
-        jd0 = pl.date2num(dtm(2005,1,1))
-        jd1 = pl.date2num(dtm(2005,12,31))
-        mp = projmaps.Projmap('glob')
-        x,y = mp(self.llon,self.llat)
-        for t in np.arange(jd0,jd1):
-            print pl.num2date(t)
-            self.load(t)
-        
-            pl.clf()
-            pl.subplot(111,axisbg='k')
-            mp.pcolormesh(x,y,
-                          miv(np.sqrt(self.u**2 +self.v**2)),
-                          cmap=cm.gist_heat)
-            pl.clim(0,1.5)
-            mp.nice()
-            pl.title('%04i-%02i-%02i' % (pl.num2date(t).year,
-                                         pl.num2date(t).month,
-                                         pl.num2date(t).day),
-                     color='w')
-            pl.savefig('/Users/bror/oscar/norm/%03i.png' % t,
-                       bbox_inches='tight',facecolor='k',dpi=150)
-        
