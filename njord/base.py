@@ -29,6 +29,7 @@ import click
 
 from njord.utils import lldist, yrday, time, gmtgrid
 from njord import config
+from njord.utils import mpl_dates as dates
 
 try:
     import projmap
@@ -660,6 +661,15 @@ class Grid(object):
                 print("write")
                 writer.grab_frame()#bbox_inches="tight", pad_inches=0)
         plt.switch_backend(curr_backend)
+
+    def datestr2num(self, *args, **kwargs):
+        return dates.datestr2num(*args, **kwargs)
+
+    def date2num(self, *args, **kwargs):
+        return dates.date2num(*args, **kwargs)
+
+    def num2date(self, *args, **kwargs):
+        return dates.num2date(*args, **kwargs)
 
     def check_gridtype(self):
         pass
