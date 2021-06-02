@@ -193,14 +193,14 @@ class Longhurst2007(base.Grid):
 
     def choropleth(self, data, regid=None, projmap=True, **pcolorkw):
         """Create choropleth map of the datavec based on Longhurst regions"""
-        chomat = lh.regions * np.nan
-        for rid in np.unique(lh.regions): 
+        chomat = self.regions * np.nan
+        for rid in np.unique(self.regions): 
             try: 
-                chomat[lh.regions==rid] = dfregr.slope[rid] 
+                chomat[self.regions==rid] = data[rid] 
             except KeyError: 
                 continue 
         if projmap:
-            mp.pcolor(self.llon, self.llat, chomat, **pcolorkw)
-            mp.nice()
+            self.mp.pcolor(self.llon, self.llat, chomat, **pcolorkw)
+            self.mp.nice()
         else:
             pl.pcolormesh(self.llon, self.llat, chomat, **pcolorkw)
