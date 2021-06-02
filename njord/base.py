@@ -506,8 +506,8 @@ class Grid(object):
         return yrday.months(self.fulljdvec)
     
     def get_tvec(self, jd1, jd2):
-        jd1 = pl.datestr2num(jd1) if type(jd1) is str else jd1
-        jd2 = pl.datestr2num(jd2) if type(jd2) is str else jd2
+        jd1 = dates.datestr2num(jd1) if type(jd1) is str else jd1
+        jd2 = dates.datestr2num(jd2) if type(jd2) is str else jd2
         tvec = self.fulljdvec
         if jd1 < tvec.min():
             raise ValueError("jd1 too small")
@@ -520,7 +520,7 @@ class Grid(object):
         """Create a timeseries of fields using mask to select data"""
         mask = mask if mask is not None else self.llat == self.llat
         if dtmvec is not None:
-            self.tvec = pl.datestr2num(dtmvec.astype(str))
+            self.tvec = dates.datestr2num(dtmvec.astype(str))
         else:
             self.tvec = self.get_tvec(jd1, jd2)
         if issubclass(dtype, numbers.Integral):
@@ -529,7 +529,7 @@ class Grid(object):
             nan = np.nan
         field = np.zeros((len(self.tvec),) + self.llat.shape, dtype=dtype)
         for n,jd in enumerate(self.tvec):
-            print(pl.num2date(jd), len(self.tvec) - n)
+            print(dates.num2date(jd), len(self.tvec) - n)
             try:
                 fld = self.get_field(fieldname, jd=jd, **loadkwargs)
                 fld[np.isnan(fld)] = nan
@@ -550,7 +550,7 @@ class Grid(object):
         hsmat = np.zeros((jd2-jd1+1,bins), dtype=np.int)
         tvec = np.arange(jd1,jd2+1)
         for n_t,jd in enumerate(tvec):
-            print(pl.num2date(jd))
+            print(dates.num2date(jd))
             self.load(fieldname, jd=jd)
             field = getattr(self, fieldname)
             field[~mask] = np.nan
@@ -647,7 +647,7 @@ class Grid(object):
         with writer.saving(fig, "%s.mp4" % self.projname, 200):
             for jd in jdvec:
                 pl.clf()
-                print(pl.num2date(jd).strftime("%Y-%m-%d %H:%M load "), end="")
+                print(dates.num2date(jd).strftime("%Y-%m-%d %H:%M load "), end="")
                 sys.stdout.flush()
                 try:
                     fld= self.get_field(fldname, jd=jd)
@@ -657,7 +657,7 @@ class Grid(object):
                 print("plot ", end="")
                 sys.stdout.flush()
                 self.pcolor(fld, **kwargs)
-                pl.title(pl.num2date(jd).strftime("%Y-%m-%d %H:%M"))
+                pl.title(dates.num2date(jd).strftime("%Y-%m-%d %H:%M"))
                 print("write")
                 writer.grab_frame()#bbox_inches="tight", pad_inches=0)
         plt.switch_backend(curr_backend)

@@ -93,6 +93,7 @@ class Base(nasa.Base):
                 'MERIS_nobs':  ['MERIS_nobs',  'chlor_a', 'OCx'],
                 'SeaWiFS_nobs':['SeaWiFS_nobs','chlor_a', 'OCx'],
                 'VIIRS_nobs':  ['VIIRS_nobs',  'chlor_a', 'OCx'],
+                'kd490': ['kd_490', 'kd', 'KD490_Lee'],
                 'rrs412': ['Rrs_412', 'rrs', 'RRS'],
                 'rrs443': ['Rrs_443', 'rrs', 'RRS'],
                 'rrs490': ['Rrs_490', 'rrs', 'RRS'],
@@ -128,7 +129,8 @@ class OceanColor(Base):
                  pl.date2num(dtm(self.yr,  1,  1))) + 1
         self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_%s-%s-%s.nc"
         tdict = self._get_timetype_dict(timetype)
-        return(self.filestamp % (self.fp.upper(), self.vc[fldname][1].upper(),
+        fldname1 = "K_490" if "kd" in fldname else self.vc[fldname][1].upper()
+        return(self.filestamp % (self.fp.upper(), fldname1,
                                  tdict["ttype"], self.res, 
                                  self.vc[fldname][2], tdict["datestr"],
                                  self._data_version))
@@ -152,8 +154,10 @@ class LocalPML(Base):
             self._timeparams(**kwargs)
             self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_%s-%s-fv%s.nc"
             tdict = self._get_timetype_dict(timetype)
+            fldname1 = "K_490" if "kd" in fldname else self.vc[fldname][1].upper()
+
             return(self.filestamp % (self.fp.upper(),
-                                     self.vc[fldname][1].upper(),
+                                     fldname1,
                                      tdict["ttype"],
                                      self.res,
                                      self.vc[fldname][2],
@@ -177,6 +181,25 @@ class LocalPML(Base):
         os.symlink(globalfile, os.path.join(self.datadir, filename))
         
         #/data/datasets/CCI/v3.1-release/geographic/netcdf/monthly/chlor_a 
+    @property
+    def vc(self):
+        """Add a dict with filename variable components"""
+        return {'chl':         ['chlor_a',     'chlor_a', 'OCx'],
+                'MODISA_nobs': ['MODISA_nobs', 'chlor_a', 'OCx'],
+                'MERIS_nobs':  ['MERIS_nobs',  'chlor_a', 'OCx'],
+                'SeaWiFS_nobs':['SeaWiFS_nobs','chlor_a', 'OCx'],
+                'VIIRS_nobs':  ['VIIRS_nobs',  'chlor_a', 'OCx'],
+                'kd490': ['kd_490', 'kd', 'KD490_Lee'],
+                'rrs412': ['Rrs_412', 'rrs', 'RRS'],
+                'rrs443': ['Rrs_443', 'rrs', 'RRS'],
+                'rrs490': ['Rrs_490', 'rrs', 'RRS'],
+                'rrs510': ['Rrs_510', 'rrs', 'RRS'],
+                'rrs555': ['Rrs_555', 'rrs', 'RRS'],
+                'rrs670': ['Rrs_670', 'rrs', 'RRS'],
+                #'ipar': ['FLH_ipar',     'km'],
+                #'eup': ['ZLEE_Zeu_lee',  'km'],
+                #'pic': ['PIC_pic',       'km'],
+                }
 
 
 class LocalPMLSST(base.Grid):
