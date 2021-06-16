@@ -73,7 +73,8 @@ class Base(nasa.Base):
         self._timeparams(**kwargs)
         self.vprint( "load jd=%f and field=%s" % (self.jd, fldname))
         self.filename = os.path.join(
-            self.datadir, self.generate_filename(fldname, timetype))
+            self.datadir, 
+            self.generate_filename(fldname=fldname, timetype=timetype))
         self.vprint( "datadir:  %s" % self.datadir)
         self.vprint( "filename: %s" % os.path.basename(self.filename))
         if not self.isncfile(self.filename):
@@ -136,12 +137,12 @@ class OceanColor(Base):
                                  self._data_version))
 
 class LocalPML(Base):
-    def __init__(self, res="4km", ver=3.1, **kwargs):
+    def __init__(self, res="4km", ver=5.0, **kwargs):
         self.data_version = f"{ver:.1f}" if type(ver) is not str else ver
         super().__init__(**kwargs)
         self.global_dir = self.global_dir.replace("3.1", self.data_version)
     
-    def generate_filename(self, fldname='chl', timetype="8D", **kwargs):
+    def generate_filename(self, timetype="daily", **kwargs):
         """Generate filename"""
         if ("m" in timetype.lower()) & ("c" in timetype.lower()):
             return ("ESACCI-OC-MAPPED-CLIMATOLOGY-1M_MONTHLY_4km_" +
@@ -152,20 +153,16 @@ class LocalPML(Base):
                    f"fv{self.data_version}.nc")
         else:
             self._timeparams(**kwargs)
-            self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_%s-%s-fv%s.nc"
+            #self.filestamp= "%s-OC-L3S-%s-MERGED-%s_%s_GEO_PML_%s-%s-fv%s.nc"
+            self.filestamp= ("ESACCI-OC-L3S-OC_PRODUCTS-MERGED-" + 
+                             "1D_DAILY_%s_GEO_PML_OCx_QAA-" +
+                             "%s-fv%s.nc")
             tdict = self._get_timetype_dict(timetype)
-            fldname1 = "K_490" if "kd" in fldname else self.vc[fldname][1].upper()
-
-            return(self.filestamp % (self.fp.upper(),
-                                     fldname1,
-                                     tdict["ttype"],
-                                     self.res,
-                                     self.vc[fldname][2],
-                                     tdict["datestr"],
-                                     self.data_version))
+            return(self.filestamp % 
+                (self.res, tdict["datestr"], self.data_version))
 
     
-    def download(self, fldname='chl', timetype="8D", **kwargs):
+    def download(self, fldname='chl', timetype="daily", **kwargs):
         """Download a missing file from the DAAC"""
         self._timeparams(**kwargs)
         if ("m" in timetype.lower()) & ("c" in timetype.lower()):
@@ -173,10 +170,9 @@ class LocalPML(Base):
         else:
             longfld = self.vc[fldname][1]
             tdict = self._get_timetype_dict(timetype)
-            globaldir = os.path.join(self.global_dir, tdict['timetype'],
-                                     longfld, str(self.yr))
+            globaldir = os.path.join(self.global_dir, str(self.yr))
             globaldir = globaldir.replace("v3.1",f"v{self.data_version}")
-        filename = self.generate_filename(fldname, timetype)
+        filename = self.generate_filename(timetype)
         globalfile = os.path.join(globaldir, filename)
         os.symlink(globalfile, os.path.join(self.datadir, filename))
         
@@ -196,6 +192,20 @@ class LocalPML(Base):
                 'rrs510': ['Rrs_510', 'rrs', 'RRS'],
                 'rrs555': ['Rrs_555', 'rrs', 'RRS'],
                 'rrs670': ['Rrs_670', 'rrs', 'RRS'],
+                'owc01': ['water_class1', 'rrs', 'RRS'],
+                'owc02': ['water_class2', 'rrs', 'RRS'],
+                'owc03': ['water_class3', 'rrs', 'RRS'],
+                'owc04': ['water_class4', 'rrs', 'RRS'],
+                'owc05': ['water_class5', 'rrs', 'RRS'],
+                'owc06': ['water_class6', 'rrs', 'RRS'],
+                'owc07': ['water_class7', 'rrs', 'RRS'],
+                'owc08': ['water_class8', 'rrs', 'RRS'],
+                'owc09': ['water_class9', 'rrs', 'RRS'],
+                'owc10': ['water_class10', 'rrs', 'RRS'],
+                'owc11': ['water_class11', 'rrs', 'RRS'],
+                'owc12': ['water_class12', 'rrs', 'RRS'],
+                'owc13': ['water_class13', 'rrs', 'RRS'],
+                'owc14': ['water_class14', 'rrs', 'RRS'],
                 #'ipar': ['FLH_ipar',     'km'],
                 #'eup': ['ZLEE_Zeu_lee',  'km'],
                 #'pic': ['PIC_pic',       'km'],
