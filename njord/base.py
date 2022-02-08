@@ -13,6 +13,7 @@ import numbers
 import numpy as np
 from scipy.spatial import cKDTree
 import netCDF4
+import pandas as pd 
 try:
     import pylab as pl
     import matplotlib as mpl
@@ -26,6 +27,7 @@ except (ImportError, RuntimeError):
 
 import requests
 import click
+from tqdm import tqdm
 
 from njord.utils import lldist, yrday, time, gmtgrid
 from njord import config
@@ -346,7 +348,36 @@ class Grid(object):
                 else:
                     fldvec[days,mask] = fld[jvec[mask], ivec[mask]]
         return np.squeeze(fldvec)
-            
+
+    def match_month(self, fldname, lonvec, latvec, dtmvec, maskvec=None, 
+        djd=1, daysback=1, nei=1,all_nei=True):
+        """Match observations with datafield using lat-lon-time positions """
+        if maskvec is not None:
+            lonvec = lonvec[maskvec]
+            latvec = latvec[maskvec]
+            dtmvec = dtmvec[maskvec]
+        if not isinstance(dtmvec, pd.DatetimeIndex):
+            dtmvec = pd.DatetimeIndex(dtmvec)
+        yrmnvec = dtmvec.snap("MS")
+        ivec,jvec = self.ll2ij(lonvec, latvec, nei=nei, all_nei=all_nei) 
+        fldvec    = np.zeros((daysback, len(latvec))) * np.nan
+        for days in np.arange(daysback):
+            for n,dtm in enumerate(yrmnvec.unique()):
+                print(yrmnvec.max() - dtm)
+                mask = dtmvec == dtm
+                try:
+                    fld = self.get_field(
+                        fldname, yr=dtm.year, mn=dtm.month, timetype="month")
+                except IOError:
+                    print("No file found")
+                    continue
+                #fldvec[days, mask] = self.ijinterp(ivec[mask],jvec[mask], fld)
+                if ivec.ndim == 2:
+                    fldvec[days,mask] = np.nanmean(fld[jvec,ivec], axis=1)[mask]
+                else:
+                    fldvec[days,mask] = fld[jvec[mask], ivec[mask]]
+        return np.squeeze(fldvec)
+
     def add_ij2ij(self, njord_obj):
         sci,scj = njord_obj.ll2ij(np.ravel(self.llon),np.ravel(self.llat))
         self.sci = sci.reshape(self.i2,self.j2)
@@ -470,13 +501,19 @@ class Grid(object):
                 if local_filename is None:
                     return r.text
                 else:
-                    with open(local_filename, 'wb') as f:
-                        for chunk in r.iter_content(chunk_size=1024): 
+                    total_size = int(r.headers.get('content-length', 0)) #Bytes
+                    chunk_size = 1024
+                    bar = tqdm(total=total_size, unit='iB', unit_scale=True, leave=False)
+                    with open(local_filename, 'wb') as f: 
+                        for chunk in r.iter_content(chunk_size=chunk_size): 
                             if chunk:
+                                bar.update(len(chunk))
                                 f.write(chunk)
                                 f.flush()
+                    bar.close()
                     return True
             else:
+                print(f"Response: {r.status_code} {r.reason}")
                 warnings.warn("Could not download file from server")
                 return False
 
